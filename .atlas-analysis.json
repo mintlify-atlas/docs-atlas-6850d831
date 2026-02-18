@@ -1,0 +1,213 @@
+{
+  "projectType": "framework",
+  "projectName": "React",
+  "projectDescription": "A JavaScript library for building user interfaces with components and declarative views.",
+  "theme": "palm",
+  "primaryColor": "#61DAFB",
+  "lightColor": "#149ECA",
+  "darkColor": "#087EA4",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "introduction",
+              "installation",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/components",
+              "concepts/jsx",
+              "concepts/props-and-state",
+              "concepts/lifecycle",
+              "concepts/hooks-overview",
+              "concepts/rendering"
+            ]
+          },
+          {
+            "group": "Building UIs",
+            "pages": [
+              "guides/describing-ui",
+              "guides/adding-interactivity",
+              "guides/managing-state",
+              "guides/conditional-rendering",
+              "guides/lists-and-keys",
+              "guides/forms"
+            ]
+          },
+          {
+            "group": "Advanced Guides",
+            "pages": [
+              "advanced/context",
+              "advanced/refs",
+              "advanced/portals",
+              "advanced/error-boundaries",
+              "advanced/code-splitting",
+              "advanced/suspense",
+              "advanced/concurrent-features",
+              "advanced/server-components"
+            ]
+          },
+          {
+            "group": "Performance",
+            "pages": [
+              "performance/optimization",
+              "performance/profiler",
+              "performance/memoization"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "React Core",
+            "pages": [
+              "api/react-api",
+              "api/components",
+              "api/create-element",
+              "api/children",
+              "api/fragments",
+              "api/strict-mode",
+              "api/suspense"
+            ]
+          },
+          {
+            "group": "Hooks",
+            "pages": [
+              "api/hooks/overview",
+              "api/hooks/use-state",
+              "api/hooks/use-effect",
+              "api/hooks/use-context",
+              "api/hooks/use-reducer",
+              "api/hooks/use-callback",
+              "api/hooks/use-memo",
+              "api/hooks/use-ref",
+              "api/hooks/use-imperative-handle",
+              "api/hooks/use-layout-effect",
+              "api/hooks/use-debug-value",
+              "api/hooks/use-deferred-value",
+              "api/hooks/use-transition",
+              "api/hooks/use-id",
+              "api/hooks/use-sync-external-store",
+              "api/hooks/use-insertion-effect",
+              "api/hooks/use-action-state",
+              "api/hooks/use-optimistic",
+              "api/hooks/use"
+            ]
+          },
+          {
+            "group": "ReactDOM",
+            "pages": [
+              "api/react-dom/overview",
+              "api/react-dom/create-root",
+              "api/react-dom/hydrate-root",
+              "api/react-dom/render-to-string",
+              "api/react-dom/render-to-static-markup",
+              "api/react-dom/find-dom-node",
+              "api/react-dom/flush-sync"
+            ]
+          },
+          {
+            "group": "Server APIs",
+            "pages": [
+              "api/server/overview",
+              "api/server/render-to-string",
+              "api/server/render-to-static-markup",
+              "api/server/render-to-readable-stream",
+              "api/server/render-to-pipe",
+              "api/server/server-components"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "React Compiler",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "compiler/introduction",
+              "compiler/installation",
+              "compiler/how-it-works"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "compiler/configuration",
+              "compiler/babel-plugin",
+              "compiler/eslint-plugin"
+            ]
+          },
+          {
+            "group": "Development",
+            "pages": [
+              "compiler/architecture",
+              "compiler/hir",
+              "compiler/optimization-passes",
+              "compiler/contributing"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Declarative component-based UI",
+    "Virtual DOM for efficient rendering",
+    "Hooks for state and side effects",
+    "JSX syntax for markup",
+    "Server-side rendering (SSR)",
+    "Server Components",
+    "Concurrent rendering and Suspense",
+    "React Compiler for automatic optimization"
+  ],
+  "publicApiSurface": [
+    "Component",
+    "PureComponent",
+    "Fragment",
+    "StrictMode",
+    "Suspense",
+    "createElement",
+    "cloneElement",
+    "createContext",
+    "createRef",
+    "forwardRef",
+    "lazy",
+    "memo",
+    "useState",
+    "useEffect",
+    "useContext",
+    "useReducer",
+    "useCallback",
+    "useMemo",
+    "useRef",
+    "useImperativeHandle",
+    "useLayoutEffect",
+    "useDebugValue",
+    "useDeferredValue",
+    "useTransition",
+    "useId",
+    "useSyncExternalStore",
+    "useInsertionEffect",
+    "useActionState",
+    "useOptimistic",
+    "use",
+    "startTransition",
+    "act",
+    "cache",
+    "createRoot",
+    "hydrateRoot",
+    "renderToString",
+    "renderToStaticMarkup",
+    "renderToReadableStream"
+  ]
+}
