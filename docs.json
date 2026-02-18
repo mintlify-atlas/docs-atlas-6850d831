@@ -1,122 +1,175 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
-  "name": "Mint Starter Kit",
+  "name": "React",
+  "theme": "palm",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#61DAFB",
+    "light": "#149ECA",
+    "dark": "#087EA4"
   },
-  "favicon": "/favicon.svg",
+  "navbar": {
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/facebook/react"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/facebook/react"
+    }
+  },
   "navigation": {
     "tabs": [
       {
-        "tab": "Guides",
+        "tab": "Documentation",
         "groups": [
           {
-            "group": "Getting started",
+            "group": "Getting Started",
             "pages": [
-              "index",
-              "quickstart",
-              "development"
+              "introduction",
+              "installation",
+              "quickstart"
             ]
           },
           {
-            "group": "Customization",
+            "group": "Core Concepts",
             "pages": [
-              "essentials/settings",
-              "essentials/navigation"
+              "concepts/components",
+              "concepts/jsx",
+              "concepts/props-and-state",
+              "concepts/lifecycle",
+              "concepts/hooks-overview",
+              "concepts/rendering"
             ]
           },
           {
-            "group": "Writing content",
+            "group": "Building UIs",
             "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/reusable-snippets"
+              "guides/describing-ui",
+              "guides/adding-interactivity",
+              "guides/managing-state",
+              "guides/conditional-rendering",
+              "guides/lists-and-keys",
+              "guides/forms"
             ]
           },
           {
-            "group": "AI tools",
+            "group": "Advanced Guides",
             "pages": [
-              "ai-tools/cursor",
-              "ai-tools/claude-code",
-              "ai-tools/windsurf"
+              "advanced/context",
+              "advanced/refs",
+              "advanced/portals",
+              "advanced/error-boundaries",
+              "advanced/code-splitting",
+              "advanced/suspense",
+              "advanced/concurrent-features",
+              "advanced/server-components"
+            ]
+          },
+          {
+            "group": "Performance",
+            "pages": [
+              "performance/optimization",
+              "performance/profiler",
+              "performance/memoization"
             ]
           }
         ]
       },
       {
-        "tab": "API reference",
+        "tab": "API Reference",
         "groups": [
           {
-            "group": "API documentation",
+            "group": "React Core",
             "pages": [
-              "api-reference/introduction"
+              "api/react-api",
+              "api/components",
+              "api/create-element",
+              "api/children",
+              "api/fragments",
+              "api/strict-mode",
+              "api/suspense"
             ]
           },
           {
-            "group": "Endpoint examples",
+            "group": "Hooks",
             "pages": [
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
+              "api/hooks/overview",
+              "api/hooks/use-state",
+              "api/hooks/use-effect",
+              "api/hooks/use-context",
+              "api/hooks/use-reducer",
+              "api/hooks/use-callback",
+              "api/hooks/use-memo",
+              "api/hooks/use-ref",
+              "api/hooks/use-imperative-handle",
+              "api/hooks/use-layout-effect",
+              "api/hooks/use-debug-value",
+              "api/hooks/use-deferred-value",
+              "api/hooks/use-transition",
+              "api/hooks/use-id",
+              "api/hooks/use-sync-external-store",
+              "api/hooks/use-insertion-effect",
+              "api/hooks/use-action-state",
+              "api/hooks/use-optimistic",
+              "api/hooks/use"
+            ]
+          },
+          {
+            "group": "ReactDOM",
+            "pages": [
+              "api/react-dom/overview",
+              "api/react-dom/create-root",
+              "api/react-dom/hydrate-root",
+              "api/react-dom/render-to-string",
+              "api/react-dom/render-to-static-markup",
+              "api/react-dom/find-dom-node",
+              "api/react-dom/flush-sync"
+            ]
+          },
+          {
+            "group": "Server APIs",
+            "pages": [
+              "api/server/overview",
+              "api/server/render-to-string",
+              "api/server/render-to-static-markup",
+              "api/server/render-to-readable-stream",
+              "api/server/render-to-pipe",
+              "api/server/server-components"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "React Compiler",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "compiler/introduction",
+              "compiler/installation",
+              "compiler/how-it-works"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "compiler/configuration",
+              "compiler/babel-plugin",
+              "compiler/eslint-plugin"
+            ]
+          },
+          {
+            "group": "Development",
+            "pages": [
+              "compiler/architecture",
+              "compiler/hir",
+              "compiler/optimization-passes",
+              "compiler/contributing"
             ]
           }
         ]
       }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
-  },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
-  },
-  "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
-      }
-    ],
-    "primary": {
-      "type": "button",
-      "label": "Dashboard",
-      "href": "https://dashboard.mintlify.com"
-    }
-  },
-  "contextual": {
-    "options": [
-     "copy",
-     "view",
-     "chatgpt",
-     "claude",
-     "perplexity",
-     "mcp",
-     "cursor",
-     "vscode"
-   ]
-  },
-  "footer": {
-    "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
-    }
+    ]
   }
 }

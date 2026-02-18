@@ -1,0 +1,547 @@
+---
+title: useDeferredValue
+description: Defer updating a part of the UI
+---
+
+`useDeferredValue` is a React Hook that lets you defer updating a part of the UI.
+
+```typescript
+function useDeferredValue<T>(value: T, initialValue?: T): T
+```
+
+## Parameters
+
+<ParamField path="value" type="T" required>
+  The value you want to defer. It can be of any type.
+</ParamField>
+
+<ParamField path="initialValue" type="T">
+  Optional value to use during the initial render. If omitted, `useDeferredValue` will return `value` on initial render, then schedule a re-render with the deferred value.
+  
+  This parameter is useful to avoid showing a blank screen on the first render.
+</ParamField>
+
+## Returns
+
+- During the initial render, the returned deferred value will be the same as the value you provided (or `initialValue` if provided)
+- During updates, React will first attempt a re-render with the old value (matching the old `value`), then try another re-render in background with the new value (matching the updated `value`)
+
+## Usage
+
+### Showing stale content while fresh content is loading
+
+Call `useDeferredValue` at the top level of your component to get a deferred version of that value:
+
+```javascript
+import { useState, useDeferredValue } from 'react';
+
+function SearchPage() {
+  const [query, setQuery] = useState('');
+  const deferredQuery = useDeferredValue(query);
+  
+  return (
+    <>
+      <input value={query} onChange={e => setQuery(e.target.value)} />
+      <SearchResults query={deferredQuery} />
+    </>
+  );
+}
+
+function SearchResults({ query }) {
+  // Expensive rendering
+  const results = searchItems(query);
+  return (
+    <ul>
+      {results.map(result => (
+        <li key={result.id}>{result.name}</li>
+      ))}
+    </ul>
+  );
+}
+```
+
+When the user types, the input updates immediately (using `query`), but the results update with a slight delay (using `deferredQuery`). This keeps the input responsive.
+
+### Indicating that the content is stale
+
+Show a visual indication while the deferred value is updating:
+
+```javascript
+function SearchPage() {
+  const [query, setQuery] = useState('');
+  const deferredQuery = useDeferredValue(query);
+  const isStale = query !== deferredQuery;
+  
+  return (
+    <>
+      <input value={query} onChange={e => setQuery(e.target.value)} />
+      <div style={{ opacity: isStale ? 0.5 : 1 }}>
+        <SearchResults query={deferredQuery} />
+      </div>
+    </>
+  );
+}
+```
+
+### Deferring re-rendering for a part of the UI
+
+You can also use `useDeferredValue` as a performance optimization:
+
+```javascript
+function ProductList({ products, filter }) {
+  const deferredFilter = useDeferredValue(filter);
+  
+  // Expensive filtering operation
+  const filteredProducts = useMemo(() => {
+    return products.filter(product => {
+      return product.name.toLowerCase().includes(deferredFilter.toLowerCase());
+    });
+  }, [products, deferredFilter]);
+  
+  return (
+    <ul>
+      {filteredProducts.map(product => (
+        <li key={product.id}>{product.name}</li>
+      ))}
+    </ul>
+  );
+}
+```
+
+<Note>
+This optimization requires the children to be wrapped in `memo`. Without `memo`, React will re-render the entire subtree anyway.
+</Note>
+
+## Common Patterns
+
+### Search with deferred results
+
+<Tabs>
+  <Tab title="Basic Search">
+    ```javascript
+    function Search() {
+      const [input, setInput] = useState('');
+      const deferredInput = useDeferredValue(input);
+      
+      return (
+        <>
+          <input
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            placeholder="Search..."
+          />
+          <Results query={deferredInput} />
+        </>
+      );
+    }
+    ```
+  </Tab>
+  <Tab title="With Loading State">
+    ```javascript
+    function Search() {
+      const [input, setInput] = useState('');
+      const deferredInput = useDeferredValue(input);
+      const isSearching = input !== deferredInput;
+      
+      return (
+        <>
+          <input
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            placeholder="Search..."
+          />
+          {isSearching && <div>Searching...</div>}
+          <Results query={deferredInput} />
+        </>
+      );
+    }
+    ```
+  </Tab>
+  <Tab title="With Dimming">
+    ```javascript
+    function Search() {
+      const [input, setInput] = useState('');
+      const deferredInput = useDeferredValue(input);
+      const isStale = input !== deferredInput;
+      
+      return (
+        <>
+          <input
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            placeholder="Search..."
+          />
+          <div
+            style={{
+              opacity: isStale ? 0.5 : 1,
+              transition: 'opacity 0.2s'
+            }}
+          >
+            <Results query={deferredInput} />
+          </div>
+        </>
+      );
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### Filter with deferred updates
+
+```javascript
+function ProductFilter({ products }) {
+  const [category, setCategory] = useState('all');
+  const [priceRange, setPriceRange] = useState([0, 1000]);
+  const [searchTerm, setSearchTerm] = useState('');
+  
+  // Defer the expensive filtering
+  const deferredSearchTerm = useDeferredValue(searchTerm);
+  
+  const filtered = useMemo(() => {
+    return products.filter(product => {
+      const matchesCategory = category === 'all' || product.category === category;
+      const matchesPrice = product.price >= priceRange[0] && product.price <= priceRange[1];
+      const matchesSearch = product.name.toLowerCase().includes(deferredSearchTerm.toLowerCase());
+      return matchesCategory && matchesPrice && matchesSearch;
+    });
+  }, [products, category, priceRange, deferredSearchTerm]);
+  
+  return (
+    <>
+      <select value={category} onChange={e => setCategory(e.target.value)}>
+        <option value="all">All Categories</option>
+        <option value="electronics">Electronics</option>
+        <option value="clothing">Clothing</option>
+      </select>
+      
+      <input
+        type="range"
+        min={0}
+        max={1000}
+        value={priceRange[1]}
+        onChange={e => setPriceRange([0, Number(e.target.value)])}
+      />
+      
+      <input
+        type="text"
+        value={searchTerm}
+        onChange={e => setSearchTerm(e.target.value)}
+        placeholder="Search products..."
+      />
+      
+      <ProductList products={filtered} />
+    </>
+  );
+}
+```
+
+### Table with deferred sorting
+
+```javascript
+function DataTable({ data }) {
+  const [sortKey, setSortKey] = useState('name');
+  const [sortDirection, setSortDirection] = useState('asc');
+  
+  const deferredSortKey = useDeferredValue(sortKey);
+  const deferredSortDirection = useDeferredValue(sortDirection);
+  
+  const sortedData = useMemo(() => {
+    return [...data].sort((a, b) => {
+      const aVal = a[deferredSortKey];
+      const bVal = b[deferredSortKey];
+      const direction = deferredSortDirection === 'asc' ? 1 : -1;
+      return aVal > bVal ? direction : -direction;
+    });
+  }, [data, deferredSortKey, deferredSortDirection]);
+  
+  return (
+    <table>
+      <thead>
+        <tr>
+          <th onClick={() => setSortKey('name')}>Name</th>
+          <th onClick={() => setSortKey('price')}>Price</th>
+          <th onClick={() => setSortKey('rating')}>Rating</th>
+        </tr>
+      </thead>
+      <tbody>
+        {sortedData.map(item => (
+          <tr key={item.id}>
+            <td>{item.name}</td>
+            <td>{item.price}</td>
+            <td>{item.rating}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+```
+
+## TypeScript
+
+```typescript
+import { useState, useDeferredValue } from 'react';
+
+function Search() {
+  const [query, setQuery] = useState<string>('');
+  const deferredQuery = useDeferredValue<string>(query);
+  
+  return (
+    <>
+      <input value={query} onChange={e => setQuery(e.target.value)} />
+      <Results query={deferredQuery} />
+    </>
+  );
+}
+
+// With initial value
+function SearchWithInitial() {
+  const [query, setQuery] = useState('');
+  const deferredQuery = useDeferredValue(query, '');
+  
+  return <Results query={deferredQuery} />;
+}
+
+// Complex types
+interface Filter {
+  category: string;
+  priceRange: [number, number];
+  searchTerm: string;
+}
+
+function FilteredList() {
+  const [filter, setFilter] = useState<Filter>({
+    category: 'all',
+    priceRange: [0, 1000],
+    searchTerm: ''
+  });
+  
+  const deferredFilter = useDeferredValue<Filter>(filter);
+  
+  return <ProductList filter={deferredFilter} />;
+}
+```
+
+## useDeferredValue vs useTransition
+
+<Tabs>
+  <Tab title="useDeferredValue">
+    ```javascript
+    function Component({ value }) {
+      // Defer a value you receive from parent
+      const deferredValue = useDeferredValue(value);
+      
+      return <ExpensiveComponent value={deferredValue} />;
+    }
+    ```
+    
+    **Use when:**
+    - You receive a value from props or a parent component
+    - You don't control the state update
+    - You want to defer rendering based on a value
+  </Tab>
+  <Tab title="useTransition">
+    ```javascript
+    function Component() {
+      const [isPending, startTransition] = useTransition();
+      const [value, setValue] = useState('');
+      
+      function handleChange(e) {
+        // Mark state update as non-urgent
+        startTransition(() => {
+          setValue(e.target.value);
+        });
+      }
+      
+      return (
+        <>
+          <input onChange={handleChange} />
+          {isPending && <Spinner />}
+          <ExpensiveComponent value={value} />
+        </>
+      );
+    }
+    ```
+    
+    **Use when:**
+    - You control the state update
+    - You want to mark specific updates as non-urgent
+    - You need a pending indicator
+  </Tab>
+</Tabs>
+
+## Troubleshooting
+
+### The deferred value never updates
+
+Make sure the component using the deferred value can re-render:
+
+```javascript
+// ❌ Component won't re-render
+const Results = ({ query }) => {
+  const results = searchItems(query);
+  return <div>{results.length}</div>;
+};
+
+// ✅ Use memo to control re-renders
+const Results = memo(({ query }) => {
+  const results = searchItems(query);
+  return <div>{results.length}</div>;
+});
+```
+
+### My UI still feels slow
+
+Make sure the expensive work is actually being deferred:
+
+```javascript
+// ❌ Expensive work in parent - not deferred
+function Parent() {
+  const [input, setInput] = useState('');
+  const deferredInput = useDeferredValue(input);
+  const results = expensiveSearch(deferredInput); // Still blocks!
+  
+  return <Results results={results} />;
+}
+
+// ✅ Expensive work in child - deferred
+function Parent() {
+  const [input, setInput] = useState('');
+  const deferredInput = useDeferredValue(input);
+  
+  return <Results query={deferredInput} />;
+}
+
+const Results = memo(({ query }) => {
+  const results = expensiveSearch(query); // Deferred!
+  return <List items={results} />;
+});
+```
+
+### The deferred update happens immediately
+
+If React has nothing else to do, it will update the deferred value immediately:
+
+```javascript
+// In a fast app with little work, you might not notice deferring
+function FastApp() {
+  const [input, setInput] = useState('');
+  const deferredInput = useDeferredValue(input);
+  
+  // Simple component - updates almost instantly
+  return <SimpleList query={deferredInput} />;
+}
+```
+
+This is expected. Deferring only helps when rendering is expensive.
+
+### Should I defer all values?
+
+No! Only defer values when:
+- Rendering is expensive and takes >50ms
+- You want to keep the UI responsive during updates
+- The delayed update won't confuse users
+
+Don't defer when:
+- Rendering is fast (less than 50ms)
+- Users expect immediate feedback
+- The value controls critical UI
+
+## Best Practices
+
+### Show loading indicators
+
+```javascript
+function Search() {
+  const [query, setQuery] = useState('');
+  const deferredQuery = useDeferredValue(query);
+  const isSearching = query !== deferredQuery;
+  
+  return (
+    <>
+      <input value={query} onChange={e => setQuery(e.target.value)} />
+      {isSearching ? (
+        <div>Updating results...</div>
+      ) : (
+        <Results query={deferredQuery} />
+      )}
+    </>
+  );
+}
+```
+
+### Combine with memo
+
+```javascript
+function Parent() {
+  const [filter, setFilter] = useState('');
+  const deferredFilter = useDeferredValue(filter);
+  
+  return <ExpensiveList filter={deferredFilter} />;
+}
+
+// Wrap in memo for best performance
+const ExpensiveList = memo(function ExpensiveList({ filter }) {
+  const items = filterItems(filter);
+  return <>{items.map(item => <Item key={item.id} item={item} />)}</>
+});
+```
+
+### Use with useMemo
+
+```javascript
+function DataView({ data, filter }) {
+  const deferredFilter = useDeferredValue(filter);
+  
+  const filtered = useMemo(() => {
+    return data.filter(item => matchesFilter(item, deferredFilter));
+  }, [data, deferredFilter]);
+  
+  return <List items={filtered} />;
+}
+```
+
+## Performance Considerations
+
+### When to use useDeferredValue
+
+```javascript
+// ✅ Good use case: Expensive rendering
+function ExpensiveList({ items, filter }) {
+  const deferredFilter = useDeferredValue(filter);
+  
+  const filtered = useMemo(() => {
+    // Expensive operation on large dataset
+    return items.filter(item => {
+      return complexFilterLogic(item, deferredFilter);
+    });
+  }, [items, deferredFilter]);
+  
+  return <VirtualizedList items={filtered} />;
+}
+
+// ❌ Bad use case: Fast rendering
+function SimpleList({ items, filter }) {
+  const deferredFilter = useDeferredValue(filter);
+  
+  // Simple filter - no benefit from deferring
+  const filtered = items.filter(item => item.name === deferredFilter);
+  
+  return filtered.map(item => <div key={item.id}>{item.name}</div>);
+}
+```
+
+### Measure before optimizing
+
+```javascript
+function Component() {
+  const [value, setValue] = useState('');
+  
+  // Measure render time
+  console.time('render');
+  const result = expensiveCalculation(value);
+  console.timeEnd('render');
+  
+  // Only add useDeferredValue if render time is >50ms
+}
+```

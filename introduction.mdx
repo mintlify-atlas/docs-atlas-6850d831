@@ -1,0 +1,162 @@
+---
+title: Introduction to React
+description: Learn about React, a JavaScript library for building user interfaces with a component-based architecture
+---
+
+# Introduction to React
+
+React is a JavaScript library for building user interfaces. Developed and maintained by Meta (formerly Facebook), React powers some of the world's most popular applications including Facebook, Instagram, Netflix, and Airbnb.
+
+<Note>
+React version 19.3.0 is the current stable release, bringing improved performance, better developer experience, and powerful new features for building modern web applications.
+</Note>
+
+## What is React?
+
+React makes it painless to create interactive UIs. You design simple views for each state in your application, and React efficiently updates and renders just the right components when your data changes.
+
+```jsx
+import { useState } from 'react';
+import { createRoot } from 'react-dom/client';
+
+function Counter() {
+  const [count, setCount] = useState(0);
+  return (
+    <>
+      <h1>{count}</h1>
+      <button onClick={() => setCount(count + 1)}>
+        Increment
+      </button>
+    </>
+  );
+}
+
+const root = createRoot(document.getElementById('root'));
+root.render(<Counter />);
+```
+
+## Key Features
+
+### Component-Based
+
+Build encapsulated components that manage their own state, then compose them to make complex UIs. Component logic is written in JavaScript instead of templates, allowing you to easily pass rich data through your app and keep state out of the DOM.
+
+```jsx
+class Welcome extends React.Component {
+  render() {
+    return <div className={this.props.name}>Hello, {this.props.name}</div>;
+  }
+}
+
+// Or use function components with hooks
+function Welcome({ name }) {
+  return <div className={name}>Hello, {name}</div>;
+}
+```
+
+### Declarative
+
+React makes it simple to describe how your UI should look at any given point in time. When your data changes, React efficiently updates and re-renders the components that need to change. This declarative approach makes your code more predictable and easier to debug.
+
+<Tip>
+Declarative views make your code more predictable and easier to debug. You describe what the UI should look like, and React figures out how to make it happen.
+</Tip>
+
+### Learn Once, Write Anywhere
+
+You can develop new features in React without rewriting existing code. React can also render on the server using Node and power mobile apps using [React Native](https://reactnative.dev/).
+
+## Core Concepts
+
+React introduces several powerful concepts that make building UIs more efficient:
+
+- **JSX** - A syntax extension for JavaScript that lets you write HTML-like code in your JavaScript files
+- **Components** - Reusable pieces of UI that can be composed together
+- **Props** - How you pass data from parent to child components
+- **State** - How components remember and manage data that changes over time
+- **Hooks** - Functions that let you use state and other React features in function components
+- **Virtual DOM** - React's efficient way of updating the browser's DOM
+
+## React Hooks
+
+React 19 includes a comprehensive set of hooks for managing state and side effects in function components:
+
+```jsx
+import {
+  useState,
+  useEffect,
+  useContext,
+  useReducer,
+  useCallback,
+  useMemo,
+  useRef,
+  useTransition,
+  useDeferredValue,
+  useId,
+  useOptimistic,
+  useActionState
+} from 'react';
+```
+
+## Getting Started
+
+Ready to start building with React? Choose your path:
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="bolt" href="/quickstart">
+    Build your first React app in 5 minutes with a hands-on tutorial
+  </Card>
+  
+  <Card title="Installation" icon="download" href="/installation">
+    Set up your development environment and install React
+  </Card>
+  
+  <Card title="Key Concepts" icon="book" href="/concepts">
+    Learn the fundamental concepts that power React applications
+  </Card>
+  
+  <Card title="API Reference" icon="code" href="/api-reference">
+    Explore the complete React API documentation
+  </Card>
+</CardGroup>
+
+## React Components
+
+React provides several built-in components and APIs:
+
+- **Fragment** - Group multiple elements without adding extra DOM nodes
+- **StrictMode** - Highlight potential problems in your application
+- **Suspense** - Display a fallback while waiting for components to load
+- **Profiler** - Measure rendering performance of your React tree
+- **Component** - Base class for defining React components as ES6 classes
+- **PureComponent** - Component with built-in shallow prop and state comparison
+
+## Why Choose React?
+
+**Industry Standard** - React is used by millions of developers worldwide and powers thousands of production applications. Its large ecosystem means you'll find libraries, tools, and community support for virtually any use case.
+
+**Performance** - React's virtual DOM and efficient diffing algorithm ensure your app only updates what's necessary, keeping your UI fast and responsive even with complex state changes.
+
+**Developer Experience** - With features like Fast Refresh, comprehensive error messages, and excellent DevTools, React provides one of the best developer experiences in modern web development.
+
+**Flexibility** - React doesn't make assumptions about your tech stack. You can use it with any backend, any build tool, and any state management solution. It's a library, not a framework.
+
+<Note>
+The `react` package contains only the functionality necessary to define React components. It is typically used together with a React renderer like `react-dom` for the web, or `react-native` for native mobile environments.
+</Note>
+
+## Next Steps
+
+<CardGroup cols={3}>
+  <Card title="Follow the Quickstart" href="/quickstart">
+    Build a counter app and learn React fundamentals
+  </Card>
+  
+  <Card title="Install React" href="/installation">
+    Set up your development environment
+  </Card>
+  
+  <Card title="Learn the Concepts" href="/concepts">
+    Understand components, props, and state
+  </Card>
+</CardGroup>

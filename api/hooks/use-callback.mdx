@@ -1,0 +1,409 @@
+---
+title: useCallback
+description: Cache a function definition between re-renders
+---
+
+`useCallback` is a React Hook that lets you cache a function definition between re-renders.
+
+```typescript
+function useCallback<T>(
+  callback: T,
+  deps: Array<mixed> | void | null
+): T
+```
+
+## Parameters
+
+<ParamField path="callback" type="T" required>
+  The function value that you want to cache. It can take any arguments and return any values. React will return (not call) your function back to you during the initial render. On subsequent renders, React will return the same function if the dependencies have not changed. Otherwise, it will return the function you passed during the current render.
+</ParamField>
+
+<ParamField path="deps" type="Array<mixed> | void | null">
+  The list of all reactive values referenced inside the callback code. React will compare each dependency with its previous value using the `Object.is` comparison.
+  
+  - If omitted, a new function is created on every render (defeats the purpose)
+  - If `[]` (empty array), the function never changes
+  - If `[dep1, dep2]`, the function updates when dependencies change
+</ParamField>
+
+## Returns
+
+On the initial render, `useCallback` returns the callback function you passed.
+
+On subsequent renders, it will either return an already stored callback function from the last render (if the dependencies haven't changed), or return the callback function you passed during this render.
+
+## Usage
+
+### Skipping re-rendering of components
+
+When you optimize rendering performance, you'll sometimes need to cache functions that you pass to child components:
+
+```javascript
+import { useCallback, memo } from 'react';
+
+function ProductPage({ productId, referrer }) {
+  const handleSubmit = useCallback((orderDetails) => {
+    post('/product/' + productId + '/buy', {
+      referrer,
+      orderDetails
+    });
+  }, [productId, referrer]);
+  
+  return <ShippingForm onSubmit={handleSubmit} />;
+}
+
+const ShippingForm = memo(function ShippingForm({ onSubmit }) {
+  // ... will only re-render if onSubmit changes
+});
+```
+
+<Note>
+`useCallback` is only useful as an optimization when passing functions to components wrapped in `memo`, or when the function is used as a dependency in other Hooks.
+</Note>
+
+### Updating state from a memoized callback
+
+Use an updater function to avoid dependencies on state:
+
+```javascript
+function TodoList() {
+  const [todos, setTodos] = useState([]);
+  
+  // ❌ Depends on todos
+  const handleAddTodo = useCallback((text) => {
+    setTodos([...todos, { id: nextId++, text }]);
+  }, [todos]); // Creates new function when todos changes
+  
+  // ✅ No dependencies needed
+  const handleAddTodo = useCallback((text) => {
+    setTodos(prevTodos => [...prevTodos, { id: nextId++, text }]);
+  }, []); // Function never changes
+  
+  return <AddTodo onAdd={handleAddTodo} />;
+}
+```
+
+### Preventing an Effect from firing too often
+
+```javascript
+function ChatRoom({ roomId }) {
+  const [message, setMessage] = useState('');
+  
+  // Memoize the function so it doesn't change on every render
+  const createOptions = useCallback(() => {
+    return {
+      serverUrl: 'https://localhost:1234',
+      roomId: roomId
+    };
+  }, [roomId]); // Only recreate if roomId changes
+  
+  useEffect(() => {
+    const options = createOptions();
+    const connection = createConnection(options);
+    connection.connect();
+    return () => connection.disconnect();
+  }, [createOptions]); // Won't run on every render
+  
+  return (
+    <>
+      <input value={message} onChange={e => setMessage(e.target.value)} />
+      <p>Room: {roomId}</p>
+    </>
+  );
+}
+```
+
+<Warning>
+In this example, it would be better to move `createOptions` inside the effect or remove the function entirely:
+
+```javascript
+useEffect(() => {
+  const options = {
+    serverUrl: 'https://localhost:1234',
+    roomId: roomId
+  };
+  const connection = createConnection(options);
+  connection.connect();
+  return () => connection.disconnect();
+}, [roomId]); // Simpler and more direct
+```
+</Warning>
+
+### Optimizing a custom Hook
+
+```javascript
+function useRouter() {
+  const { dispatch } = useContext(RouterContext);
+  
+  // Memoize functions returned from custom hooks
+  const navigate = useCallback((url) => {
+    dispatch({ type: 'navigate', url });
+  }, [dispatch]);
+  
+  const goBack = useCallback(() => {
+    dispatch({ type: 'back' });
+  }, [dispatch]);
+  
+  return { navigate, goBack };
+}
+
+// Now components using this hook won't re-render unnecessarily
+function MyComponent() {
+  const { navigate } = useRouter();
+  
+  useEffect(() => {
+    // This effect won't re-run unless navigate actually changes
+    // (which only happens if dispatch changes)
+  }, [navigate]);
+}
+```
+
+## Common Patterns
+
+### Event handlers
+
+<Tabs>
+  <Tab title="Without memo">
+    ```javascript
+    function Component() {
+      // ❌ Unnecessary - not passed to memoized child
+      const handleClick = useCallback(() => {
+        console.log('clicked');
+      }, []);
+      
+      return <button onClick={handleClick}>Click</button>;
+    }
+    
+    // ✅ Better - no need for useCallback
+    function Component() {
+      function handleClick() {
+        console.log('clicked');
+      }
+      
+      return <button onClick={handleClick}>Click</button>;
+    }
+    ```
+  </Tab>
+  <Tab title="With memo">
+    ```javascript
+    function Parent() {
+      // ✅ Necessary - passed to memoized child
+      const handleClick = useCallback(() => {
+        console.log('clicked');
+      }, []);
+      
+      return <MemoizedChild onClick={handleClick} />;
+    }
+    
+    const MemoizedChild = memo(function Child({ onClick }) {
+      return <button onClick={onClick}>Click</button>;
+    });
+    ```
+  </Tab>
+</Tabs>
+
+### With external store
+
+```javascript
+function SearchResults({ query }) {
+  // Cache the subscribe function
+  const subscribe = useCallback((callback) => {
+    return searchAPI.subscribe(query, callback);
+  }, [query]);
+  
+  const results = useSyncExternalStore(
+    subscribe,
+    () => searchAPI.getSnapshot(query),
+    () => []
+  );
+  
+  return <Results items={results} />;
+}
+```
+
+## TypeScript
+
+```typescript
+import { useCallback } from 'react';
+
+// Function type is inferred from callback
+const handleClick = useCallback(() => {
+  console.log('clicked');
+}, []);
+// Type: () => void
+
+// With parameters
+const handleSubmit = useCallback((data: FormData) => {
+  submitForm(data);
+}, []);
+// Type: (data: FormData) => void
+
+// With return value
+const calculate = useCallback((a: number, b: number): number => {
+  return a + b;
+}, []);
+// Type: (a: number, b: number) => number
+
+// Explicitly type the callback
+type ClickHandler = (event: MouseEvent) => void;
+
+const handleClick = useCallback<ClickHandler>((event) => {
+  console.log(event.clientX);
+}, []);
+```
+
+### Generic callbacks
+
+```typescript
+interface Props<T> {
+  items: T[];
+  onSelect: (item: T) => void;
+}
+
+function List<T>({ items, onSelect }: Props<T>) {
+  const handleClick = useCallback((item: T) => {
+    onSelect(item);
+  }, [onSelect]);
+  
+  return (
+    <>
+      {items.map(item => (
+        <button onClick={() => handleClick(item)}>
+          {String(item)}
+        </button>
+      ))}
+    </>
+  );
+}
+```
+
+## Troubleshooting
+
+### My callback runs on every render
+
+Make sure you provided a dependency array:
+
+```javascript
+// ❌ Missing dependency array
+const callback = useCallback(() => {
+  // ...
+}); // Creates new function every render!
+
+// ✅ With dependency array
+const callback = useCallback(() => {
+  // ...
+}, []); // Function stays the same
+```
+
+### My callback is being created on every render despite dependencies
+
+One of your dependencies might be changing on every render:
+
+```javascript
+function Component() {
+  const options = { mode: 'fast' }; // New object every render
+  
+  const callback = useCallback(() => {
+    processData(options);
+  }, [options]); // options changes every render!
+}
+```
+
+Solutions:
+
+<Tabs>
+  <Tab title="Move outside">
+    ```javascript
+    const options = { mode: 'fast' }; // Outside component
+    
+    function Component() {
+      const callback = useCallback(() => {
+        processData(options);
+      }, []); // options never changes
+    }
+    ```
+  </Tab>
+  <Tab title="Use useMemo">
+    ```javascript
+    function Component() {
+      const options = useMemo(() => ({
+        mode: 'fast'
+      }), []);
+      
+      const callback = useCallback(() => {
+        processData(options);
+      }, [options]); // options stays the same
+    }
+    ```
+  </Tab>
+  <Tab title="Don't depend on it">
+    ```javascript
+    function Component() {
+      const callback = useCallback(() => {
+        const options = { mode: 'fast' }; // Inside callback
+        processData(options);
+      }, []); // No dependency needed
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### Should I add useCallback everywhere?
+
+No! Only use `useCallback` when:
+
+1. You're passing the function to a component wrapped in `memo`
+2. The function is a dependency of another Hook (useEffect, useMemo, etc.)
+3. The function is expensive to create (rare)
+
+```javascript
+// ❌ Unnecessary - no optimization benefit
+function Component() {
+  const handleClick = useCallback(() => {
+    console.log('clicked');
+  }, []);
+  
+  return <button onClick={handleClick}>Click</button>;
+}
+
+// ✅ Better - simpler and same performance
+function Component() {
+  function handleClick() {
+    console.log('clicked');
+  }
+  
+  return <button onClick={handleClick}>Click</button>;
+}
+```
+
+## useCallback vs useMemo
+
+```javascript
+// These are equivalent:
+const memoizedCallback = useCallback(() => {
+  doSomething(a, b);
+}, [a, b]);
+
+const memoizedCallback = useMemo(() => {
+  return () => {
+    doSomething(a, b);
+  };
+}, [a, b]);
+```
+
+| Hook | Purpose | Returns |
+|------|---------|----------|
+| `useCallback` | Cache function definition | The function itself |
+| `useMemo` | Cache computation result | The computed value |
+
+```javascript
+// useCallback: Cache the function
+const handleClick = useCallback(() => {
+  console.log('clicked');
+}, []);
+
+// useMemo: Cache the result
+const sortedItems = useMemo(() => {
+  return items.sort((a, b) => a.value - b.value);
+}, [items]);
+```

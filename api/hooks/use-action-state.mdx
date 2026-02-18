@@ -1,0 +1,571 @@
+---
+title: useActionState
+description: Manage state for Server Actions
+---
+
+`useActionState` is a React Hook that allows you to update state based on the result of a form action.
+
+```typescript
+function useActionState<S, P>(
+  action: (state: Awaited<S>, payload: P) => S,
+  initialState: Awaited<S>,
+  permalink?: string
+): [Awaited<S>, (payload: P) => void, boolean]
+```
+
+<Note>
+In earlier React Canary versions, this API was part of React DOM and called `useFormState`.
+</Note>
+
+## Parameters
+
+<ParamField path="action" type="(state: Awaited<S>, payload: P) => S" required>
+  The function to be called when the form is submitted or button is pressed. When the function is called, it will receive the previous state of the form (initially the `initialState` you pass, subsequently its previous return value) as its first argument, followed by the form data as its second argument.
+  
+  The action can be:
+  - A synchronous function that returns the next state
+  - An async function (Server Action) that returns a Promise of the next state
+</ParamField>
+
+<ParamField path="initialState" type="Awaited<S>" required>
+  The initial state before the action is called. It can be any serializable value. This argument is ignored after the action is first invoked.
+</ParamField>
+
+<ParamField path="permalink" type="string">
+  Optional string containing the unique page URL that this form modifies. For use on pages with dynamic content (e.g., feeds) in conjunction with progressive enhancement: if `action` is a Server Action and the form is submitted before the JavaScript bundle loads, the browser will navigate to the specified permalink URL instead of the current page's URL.
+</ParamField>
+
+## Returns
+
+`useActionState` returns an array with exactly three values:
+
+<ResponseField name="[0]" type="Awaited<S>">
+  The current state. During the first render, it matches the `initialState` you passed. After the action is invoked, it matches the value returned by the action.
+</ResponseField>
+
+<ResponseField name="[1]" type="(payload: P) => void">
+  A dispatch function that you can pass to a form as the `action` prop or call directly. When called, it will invoke the action with the current state and the payload.
+</ResponseField>
+
+<ResponseField name="[2]" type="boolean">
+  Whether the action is pending. `true` if the action is currently executing, `false` otherwise.
+</ResponseField>
+
+## Usage
+
+### Using information from a form submission
+
+Call `useActionState` at the top level of your component to create component state that is updated when a form is submitted:
+
+```javascript
+import { useActionState } from 'react';
+
+async function increment(previousState, formData) {
+  return previousState + 1;
+}
+
+function Counter() {
+  const [count, formAction, isPending] = useActionState(increment, 0);
+  
+  return (
+    <form action={formAction}>
+      <p>Count: {count}</p>
+      <button type="submit" disabled={isPending}>
+        {isPending ? 'Incrementing...' : 'Increment'}
+      </button>
+    </form>
+  );
+}
+```
+
+### Displaying form errors
+
+You can use the state returned by `useActionState` to display error messages:
+
+```javascript
+import { useActionState } from 'react';
+
+async function submitForm(previousState, formData) {
+  const email = formData.get('email');
+  
+  if (!email || !email.includes('@')) {
+    return {
+      error: 'Please enter a valid email address'
+    };
+  }
+  
+  // Submit to server...
+  await saveEmail(email);
+  
+  return {
+    success: true,
+    message: 'Email saved successfully!'
+  };
+}
+
+function EmailForm() {
+  const [state, formAction, isPending] = useActionState(submitForm, {
+    error: null,
+    success: false
+  });
+  
+  return (
+    <form action={formAction}>
+      <input name="email" type="email" required />
+      
+      {state.error && (
+        <p style={{ color: 'red' }}>{state.error}</p>
+      )}
+      
+      {state.success && (
+        <p style={{ color: 'green' }}>{state.message}</p>
+      )}
+      
+      <button type="submit" disabled={isPending}>
+        {isPending ? 'Submitting...' : 'Submit'}
+      </button>
+    </form>
+  );
+}
+```
+
+### Server Actions with useActionState
+
+With React Server Components, you can use Server Actions:
+
+```javascript
+// app/actions.js (Server Component)
+'use server';
+
+export async function createTodo(previousState, formData) {
+  const title = formData.get('title');
+  
+  if (!title || title.length < 3) {
+    return {
+      error: 'Title must be at least 3 characters',
+      todos: previousState.todos
+    };
+  }
+  
+  const newTodo = await db.todos.create({
+    title,
+    completed: false
+  });
+  
+  return {
+    error: null,
+    todos: [...previousState.todos, newTodo]
+  };
+}
+
+// app/TodoList.js (Client Component)
+'use client';
+
+import { useActionState } from 'react';
+import { createTodo } from './actions';
+
+export function TodoList({ initialTodos }) {
+  const [state, formAction, isPending] = useActionState(createTodo, {
+    error: null,
+    todos: initialTodos
+  });
+  
+  return (
+    <>
+      <form action={formAction}>
+        <input name="title" placeholder="New todo..." required />
+        <button type="submit" disabled={isPending}>
+          {isPending ? 'Adding...' : 'Add Todo'}
+        </button>
+        {state.error && <p style={{ color: 'red' }}>{state.error}</p>}
+      </form>
+      
+      <ul>
+        {state.todos.map(todo => (
+          <li key={todo.id}>{todo.title}</li>
+        ))}
+      </ul>
+    </>
+  );
+}
+```
+
+## Common Patterns
+
+### Form validation
+
+```javascript
+import { useActionState } from 'react';
+
+async function validateAndSubmit(previousState, formData) {
+  const name = formData.get('name');
+  const email = formData.get('email');
+  const message = formData.get('message');
+  
+  const errors = {};
+  
+  if (!name || name.length < 2) {
+    errors.name = 'Name must be at least 2 characters';
+  }
+  
+  if (!email || !email.includes('@')) {
+    errors.email = 'Please enter a valid email';
+  }
+  
+  if (!message || message.length < 10) {
+    errors.message = 'Message must be at least 10 characters';
+  }
+  
+  if (Object.keys(errors).length > 0) {
+    return { errors, success: false };
+  }
+  
+  // Submit to server
+  await sendContactForm({ name, email, message });
+  
+  return { errors: {}, success: true };
+}
+
+function ContactForm() {
+  const [state, formAction, isPending] = useActionState(validateAndSubmit, {
+    errors: {},
+    success: false
+  });
+  
+  return (
+    <form action={formAction}>
+      <div>
+        <label htmlFor="name">Name:</label>
+        <input id="name" name="name" required />
+        {state.errors.name && <p className="error">{state.errors.name}</p>}
+      </div>
+      
+      <div>
+        <label htmlFor="email">Email:</label>
+        <input id="email" name="email" type="email" required />
+        {state.errors.email && <p className="error">{state.errors.email}</p>}
+      </div>
+      
+      <div>
+        <label htmlFor="message">Message:</label>
+        <textarea id="message" name="message" required />
+        {state.errors.message && <p className="error">{state.errors.message}</p>}
+      </div>
+      
+      {state.success && <p className="success">Form submitted successfully!</p>}
+      
+      <button type="submit" disabled={isPending}>
+        {isPending ? 'Submitting...' : 'Submit'}
+      </button>
+    </form>
+  );
+}
+```
+
+### Multi-step form
+
+```javascript
+function MultiStepForm() {
+  const [state, formAction, isPending] = useActionState(handleFormStep, {
+    step: 1,
+    data: {},
+    errors: null
+  });
+  
+  return (
+    <form action={formAction}>
+      {state.step === 1 && (
+        <div>
+          <h2>Step 1: Personal Information</h2>
+          <input name="firstName" placeholder="First Name" required />
+          <input name="lastName" placeholder="Last Name" required />
+          <input type="hidden" name="action" value="next" />
+        </div>
+      )}
+      
+      {state.step === 2 && (
+        <div>
+          <h2>Step 2: Contact Details</h2>
+          <input name="email" type="email" placeholder="Email" required />
+          <input name="phone" placeholder="Phone" required />
+          <input type="hidden" name="action" value="next" />
+        </div>
+      )}
+      
+      {state.step === 3 && (
+        <div>
+          <h2>Step 3: Review</h2>
+          <p>Name: {state.data.firstName} {state.data.lastName}</p>
+          <p>Email: {state.data.email}</p>
+          <p>Phone: {state.data.phone}</p>
+          <input type="hidden" name="action" value="submit" />
+        </div>
+      )}
+      
+      {state.errors && <p style={{ color: 'red' }}>{state.errors}</p>}
+      
+      <div>
+        {state.step > 1 && (
+          <button
+            type="submit"
+            name="action"
+            value="back"
+            disabled={isPending}
+          >
+            Back
+          </button>
+        )}
+        <button type="submit" disabled={isPending}>
+          {state.step === 3 ? 'Submit' : 'Next'}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+async function handleFormStep(previousState, formData) {
+  const action = formData.get('action');
+  
+  if (action === 'back') {
+    return {
+      ...previousState,
+      step: previousState.step - 1
+    };
+  }
+  
+  if (action === 'next') {
+    // Save current step data
+    const newData = { ...previousState.data };
+    for (let [key, value] of formData.entries()) {
+      if (key !== 'action') {
+        newData[key] = value;
+      }
+    }
+    
+    return {
+      ...previousState,
+      step: previousState.step + 1,
+      data: newData
+    };
+  }
+  
+  if (action === 'submit') {
+    // Submit final form
+    await submitForm(previousState.data);
+    return {
+      ...previousState,
+      step: 4,
+      success: true
+    };
+  }
+}
+```
+
+### Optimistic updates
+
+```javascript
+import { useActionState, useOptimistic } from 'react';
+
+async function addComment(previousState, formData) {
+  const comment = formData.get('comment');
+  
+  // Simulate network delay
+  await new Promise(resolve => setTimeout(resolve, 1000));
+  
+  const newComment = {
+    id: Date.now(),
+    text: comment,
+    author: 'Current User',
+    timestamp: new Date().toISOString()
+  };
+  
+  return {
+    comments: [...previousState.comments, newComment]
+  };
+}
+
+function CommentSection({ initialComments }) {
+  const [state, formAction, isPending] = useActionState(addComment, {
+    comments: initialComments
+  });
+  
+  return (
+    <div>
+      <ul>
+        {state.comments.map(comment => (
+          <li key={comment.id} style={{ opacity: isPending ? 0.7 : 1 }}>
+            <strong>{comment.author}</strong>: {comment.text}
+          </li>
+        ))}
+      </ul>
+      
+      <form action={formAction}>
+        <textarea name="comment" required placeholder="Add a comment..." />
+        <button type="submit" disabled={isPending}>
+          {isPending ? 'Posting...' : 'Post Comment'}
+        </button>
+      </form>
+    </div>
+  );
+}
+```
+
+## TypeScript
+
+```typescript
+import { useActionState } from 'react';
+
+interface FormState {
+  error: string | null;
+  success: boolean;
+  data?: any;
+}
+
+type FormPayload = FormData;
+
+async function submitForm(
+  previousState: FormState,
+  formData: FormPayload
+): Promise<FormState> {
+  const email = formData.get('email') as string;
+  
+  if (!email.includes('@')) {
+    return {
+      error: 'Invalid email',
+      success: false
+    };
+  }
+  
+  await saveEmail(email);
+  
+  return {
+    error: null,
+    success: true,
+    data: { email }
+  };
+}
+
+function MyForm() {
+  const [state, formAction, isPending] = useActionState<FormState, FormPayload>(
+    submitForm,
+    { error: null, success: false }
+  );
+  
+  return (
+    <form action={formAction}>
+      <input name="email" type="email" />
+      {state.error && <p>{state.error}</p>}
+      <button disabled={isPending}>Submit</button>
+    </form>
+  );
+}
+```
+
+## Troubleshooting
+
+### My action isn't receiving the form data
+
+Make sure you're using the dispatch function returned by `useActionState` as the form's `action` prop:
+
+```javascript
+// ❌ Wrong - won't work
+function Component() {
+  const [state, formAction] = useActionState(myAction, initialState);
+  return <form action={myAction}>...</form>;
+}
+
+// ✅ Correct - use formAction
+function Component() {
+  const [state, formAction] = useActionState(myAction, initialState);
+  return <form action={formAction}>...</form>;
+}
+```
+
+### The state isn't updating
+
+Make sure your action function returns the new state:
+
+```javascript
+// ❌ Wrong - doesn't return state
+async function myAction(prevState, formData) {
+  await doSomething(formData);
+  // No return!
+}
+
+// ✅ Correct - returns new state
+async function myAction(prevState, formData) {
+  await doSomething(formData);
+  return { ...prevState, updated: true };
+}
+```
+
+### Can I call the action programmatically?
+
+Yes, call the dispatch function directly:
+
+```javascript
+function Component() {
+  const [state, formAction, isPending] = useActionState(myAction, initialState);
+  
+  function handleClick() {
+    const formData = new FormData();
+    formData.set('key', 'value');
+    formAction(formData);
+  }
+  
+  return <button onClick={handleClick}>Do Action</button>;
+}
+```
+
+## Best Practices
+
+### Keep actions pure for the same input
+
+```javascript
+// ✅ Good - deterministic
+async function increment(prevState, formData) {
+  return prevState + 1;
+}
+
+// ❌ Bad - uses external state
+let externalCounter = 0;
+async function increment(prevState, formData) {
+  return prevState + externalCounter++;
+}
+```
+
+### Return consistent state shape
+
+```javascript
+// ✅ Good - consistent shape
+async function submitForm(prevState, formData) {
+  if (error) {
+    return { error: 'Failed', success: false, data: null };
+  }
+  return { error: null, success: true, data: result };
+}
+
+// ❌ Bad - inconsistent shape
+async function submitForm(prevState, formData) {
+  if (error) {
+    return { error: 'Failed' };
+  }
+  return result; // Different shape!
+}
+```
+
+### Show loading states
+
+```javascript
+function Component() {
+  const [state, formAction, isPending] = useActionState(myAction, initialState);
+  
+  return (
+    <form action={formAction}>
+      <button disabled={isPending}>
+        {isPending ? 'Submitting...' : 'Submit'}
+      </button>
+    </form>
+  );
+}
+```

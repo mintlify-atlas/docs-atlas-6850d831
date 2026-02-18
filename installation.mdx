@@ -1,0 +1,422 @@
+---
+title: Installation
+description: Complete guide to installing React and setting up your development environment
+---
+
+# Installing React
+
+This guide walks you through setting up React in your project. Whether you're starting a new project or adding React to an existing one, you'll find the instructions you need here.
+
+## Requirements
+
+Before you begin, make sure you have the following installed on your system:
+
+- **Node.js** - Version 0.10.0 or higher (though we recommend the latest LTS version for best experience)
+- **npm** - Usually comes with Node.js, or you can use yarn/pnpm as alternatives
+- A code editor (we recommend [VS Code](https://code.visualstudio.com/) with the ES7+ React snippets extension)
+
+<Tip>
+To check your Node.js version, run `node --version` in your terminal. To check npm, run `npm --version`.
+</Tip>
+
+## Installation Methods
+
+You can install React in several ways depending on your project needs:
+
+### Method 1: Using a Package Manager (Recommended)
+
+Install React and React DOM using your preferred package manager:
+
+<CodeGroup>
+
+```bash npm
+npm install react react-dom
+```
+
+```bash yarn
+yarn add react react-dom
+```
+
+```bash pnpm
+pnpm add react react-dom
+```
+
+</CodeGroup>
+
+This installs:
+- **react** (v19.3.0) - The core React library for defining components
+- **react-dom** - The React renderer for web applications
+
+<Note>
+The `react` package contains only the functionality necessary to define React components. You need `react-dom` to render components in the browser.
+</Note>
+
+### Method 2: Using a CDN
+
+For quick prototypes or learning, you can include React directly via CDN without any build tools:
+
+```html
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>React App</title>
+</head>
+<body>
+  <div id="root"></div>
+
+  <!-- Load React and React DOM -->
+  <script crossorigin src="https://unpkg.com/react@19/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@19/umd/react-dom.production.min.js"></script>
+  
+  <!-- Load your application -->
+  <script>
+    const { useState } = React;
+    const { createRoot } = ReactDOM;
+
+    function App() {
+      const [count, setCount] = useState(0);
+      return React.createElement('div', null,
+        React.createElement('h1', null, count),
+        React.createElement('button', { onClick: () => setCount(count + 1) }, 'Increment')
+      );
+    }
+
+    const root = createRoot(document.getElementById('root'));
+    root.render(React.createElement(App));
+  </script>
+</body>
+</html>
+```
+
+<Warning>
+CDN builds are great for learning and prototyping, but use the npm version for production applications. The CDN approach doesn't support JSX syntax without additional transpilation.
+</Warning>
+
+### Method 3: Using Create React App
+
+Create React App sets up a modern React development environment with zero configuration:
+
+<CodeGroup>
+
+```bash npm
+npx create-react-app my-app
+cd my-app
+npm start
+```
+
+```bash yarn
+yarn create react-app my-app
+cd my-app
+yarn start
+```
+
+```bash pnpm
+pnpm create react-app my-app
+cd my-app
+pnpm start
+```
+
+</CodeGroup>
+
+This creates a new directory with a complete React project structure, including:
+- A development server with Fast Refresh
+- A build script that bundles your app for production
+- ESLint configuration for catching common mistakes
+- Jest setup for testing
+
+### Method 4: Using Vite (Fast Alternative)
+
+Vite offers a faster development experience with near-instant server start:
+
+<CodeGroup>
+
+```bash npm
+npm create vite@latest my-react-app -- --template react
+cd my-react-app
+npm install
+npm run dev
+```
+
+```bash yarn
+yarn create vite my-react-app --template react
+cd my-react-app
+yarn
+yarn dev
+```
+
+```bash pnpm
+pnpm create vite my-react-app --template react
+cd my-react-app
+pnpm install
+pnpm dev
+```
+
+</CodeGroup>
+
+## Creating Your First React App
+
+<Steps>
+  <Step title="Create a new directory">
+    Open your terminal and create a new project directory:
+    
+    ```bash
+    mkdir my-react-app
+    cd my-react-app
+    ```
+  </Step>
+
+  <Step title="Initialize your project">
+    Create a `package.json` file:
+    
+    ```bash
+    npm init -y
+    ```
+  </Step>
+
+  <Step title="Install React">
+    Install React and React DOM:
+    
+    ```bash
+    npm install react react-dom
+    ```
+  </Step>
+
+  <Step title="Install a bundler">
+    For development, you'll need a bundler. Install Vite for a fast experience:
+    
+    ```bash
+    npm install --save-dev vite @vitejs/plugin-react
+    ```
+  </Step>
+
+  <Step title="Create your project structure">
+    Create the following files:
+    
+    ```bash
+    mkdir src
+    touch index.html src/main.jsx src/App.jsx vite.config.js
+    ```
+  </Step>
+
+  <Step title="Configure Vite">
+    Add this to `vite.config.js`:
+    
+    ```javascript
+    import { defineConfig } from 'vite'
+    import react from '@vitejs/plugin-react'
+
+    export default defineConfig({
+      plugins: [react()],
+    })
+    ```
+  </Step>
+
+  <Step title="Create your HTML file">
+    Add this to `index.html`:
+    
+    ```html
+    <!DOCTYPE html>
+    <html lang="en">
+      <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>My React App</title>
+      </head>
+      <body>
+        <div id="root"></div>
+        <script type="module" src="/src/main.jsx"></script>
+      </body>
+    </html>
+    ```
+  </Step>
+
+  <Step title="Create your entry point">
+    Add this to `src/main.jsx`:
+    
+    ```jsx
+    import { StrictMode } from 'react'
+    import { createRoot } from 'react-dom/client'
+    import App from './App.jsx'
+
+    createRoot(document.getElementById('root')).render(
+      <StrictMode>
+        <App />
+      </StrictMode>
+    )
+    ```
+  </Step>
+
+  <Step title="Create your first component">
+    Add this to `src/App.jsx`:
+    
+    ```jsx
+    import { useState } from 'react'
+
+    function App() {
+      const [count, setCount] = useState(0)
+
+      return (
+        <div>
+          <h1>Welcome to React!</h1>
+          <p>Count: {count}</p>
+          <button onClick={() => setCount(count + 1)}>
+            Increment
+          </button>
+        </div>
+      )
+    }
+
+    export default App
+    ```
+  </Step>
+
+  <Step title="Add scripts to package.json">
+    Update your `package.json` to include:
+    
+    ```json
+    {
+      "scripts": {
+        "dev": "vite",
+        "build": "vite build",
+        "preview": "vite preview"
+      }
+    }
+    ```
+  </Step>
+
+  <Step title="Start the development server">
+    Run your application:
+    
+    ```bash
+    npm run dev
+    ```
+    
+    Open your browser to `http://localhost:5173` to see your app running!
+  </Step>
+</Steps>
+
+## Verifying Your Installation
+
+After installation, verify everything works by creating a simple test component:
+
+```jsx
+import { useState } from 'react';
+import { createRoot } from 'react-dom/client';
+
+function TestComponent() {
+  const [message, setMessage] = useState('React is working!');
+  
+  return (
+    <div>
+      <h1>{message}</h1>
+      <button onClick={() => setMessage('Installation successful!')}>
+        Click me
+      </button>
+    </div>
+  );
+}
+
+const root = createRoot(document.getElementById('root'));
+root.render(<TestComponent />);
+```
+
+If you see the message and the button responds to clicks, your React installation is working correctly!
+
+## Using React with TypeScript
+
+For TypeScript support, install the type definitions:
+
+<CodeGroup>
+
+```bash npm
+npm install --save-dev @types/react @types/react-dom
+```
+
+```bash yarn
+yarn add --dev @types/react @types/react-dom
+```
+
+```bash pnpm
+pnpm add -D @types/react @types/react-dom
+```
+
+</CodeGroup>
+
+Then rename your files from `.jsx` to `.tsx` and enjoy full type safety:
+
+```tsx
+import { useState } from 'react';
+
+interface Props {
+  name: string;
+}
+
+function Greeting({ name }: Props) {
+  const [count, setCount] = useState<number>(0);
+  
+  return (
+    <div>
+      <h1>Hello, {name}!</h1>
+      <p>Count: {count}</p>
+    </div>
+  );
+}
+```
+
+## Additional Tools
+
+Consider installing these tools for a better development experience:
+
+- **React DevTools** - Browser extension for debugging React applications
+- **ESLint** - Catch errors and enforce code style
+- **Prettier** - Code formatter for consistent style
+- **React Testing Library** - Test your React components
+
+```bash
+npm install --save-dev eslint eslint-plugin-react prettier @testing-library/react @testing-library/jest-dom
+```
+
+## Production Build
+
+When you're ready to deploy your application, React provides optimized production builds that:
+
+- Remove development-only code and warnings
+- Minify your code for smaller bundle sizes
+- Enable production optimizations
+
+<Note>
+Always use the production build when deploying. The development version includes extra warnings and helpful error messages, but these make the bundle larger and slower.
+</Note>
+
+Build for production:
+
+```bash
+npm run build
+```
+
+This creates an optimized production build in the `dist` or `build` directory, ready for deployment.
+
+## Troubleshooting
+
+**Module not found errors**: Make sure you've installed all dependencies with `npm install`.
+
+**React hooks not working**: Ensure you're using React 16.8.0 or higher. Check with `npm list react`.
+
+**Different React versions**: Having multiple versions of React can cause issues. Run `npm list react` to check for duplicates.
+
+**JSX not recognized**: Make sure your build tool is configured to handle JSX. With Vite, ensure you're using `.jsx` or `.tsx` file extensions.
+
+## Next Steps
+
+Now that you have React installed, you're ready to start building!
+
+<CardGroup cols={2}>
+  <Card title="Quickstart Tutorial" icon="rocket" href="/quickstart">
+    Build your first React app with a hands-on tutorial
+  </Card>
+  
+  <Card title="Learn Key Concepts" icon="book" href="/concepts">
+    Understand components, props, state, and hooks
+  </Card>
+</CardGroup>

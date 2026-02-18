@@ -1,0 +1,592 @@
+---
+title: flushSync
+description: Force synchronous React updates for immediate DOM changes
+---
+
+# flushSync
+
+Forces React to flush all pending updates synchronously, ensuring the DOM is immediately updated.
+
+```javascript
+import { flushSync } from 'react-dom';
+
+flushSync(() => {
+  setState(newValue);
+});
+// DOM is now updated
+```
+
+<Warning>
+`flushSync` can significantly hurt performance. Use sparingly and only when necessary.
+</Warning>
+
+## Reference
+
+### `flushSync(callback?)`
+
+Call `flushSync` to force React to flush any pending work and update the DOM synchronously.
+
+```javascript /src/shared/ReactDOMFlushSync.js:17-50
+flushSync(() => {
+  setCount(count + 1);
+});
+```
+
+#### Parameters
+
+<ParamField path="callback" type="() => void">
+  Optional callback function containing state updates. React will immediately flush these updates and apply them to the DOM before `flushSync` returns.
+  
+  ```javascript
+  flushSync(() => {
+    setState(newValue);
+  });
+  // State is now committed to DOM
+  
+  // Or call without callback to flush pending updates
+  flushSync();
+  ```
+</ParamField>
+
+#### Returns
+
+<ResponseField name="void" type="undefined">
+  Returns nothing. All updates are flushed synchronously before the function returns.
+</ResponseField>
+
+---
+
+## When to Use flushSync
+
+### 1. Third-Party Integrations
+
+When integrating with third-party libraries that need immediate DOM access:
+
+```javascript
+import { flushSync } from 'react-dom';
+import { useState, useEffect } from 'react';
+import thirdPartyLibrary from 'some-library';
+
+function Chart({ data }) {
+  const [container, setContainer] = useState(null);
+  
+  useEffect(() => {
+    if (!container) return;
+    
+    // Ensure React has updated the DOM before library accesses it
+    flushSync(() => {
+      setContainer(container);
+    });
+    
+    const chart = thirdPartyLibrary.init(container);
+    chart.render(data);
+    
+    return () => chart.destroy();
+  }, [container, data]);
+  
+  return <div ref={setContainer} />;
+}
+```
+
+### 2. Print Functionality
+
+Ensure all updates are applied before printing:
+
+```javascript
+import { flushSync } from 'react-dom';
+import { useState } from 'react';
+
+function Report() {
+  const [showDetails, setShowDetails] = useState(false);
+  
+  const handlePrint = () => {
+    // Expand all sections before printing
+    flushSync(() => {
+      setShowDetails(true);
+    });
+    // DOM is now updated, safe to print
+    window.print();
+  };
+  
+  return (
+    <div>
+      <button onClick={handlePrint}>Print Report</button>
+      {showDetails && <DetailedReport />}
+    </div>
+  );
+}
+```
+
+### 3. Focus Management
+
+When you need to focus an element immediately after rendering:
+
+```javascript
+import { flushSync } from 'react-dom';
+import { useState, useRef } from 'react';
+
+function Dialog({ onClose }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const inputRef = useRef(null);
+  
+  const openDialog = () => {
+    flushSync(() => {
+      setIsOpen(true);
+    });
+    // Input is now in DOM, safe to focus
+    inputRef.current?.focus();
+  };
+  
+  if (!isOpen) {
+    return <button onClick={openDialog}>Open Dialog</button>;
+  }
+  
+  return (
+    <div>
+      <input ref={inputRef} />
+      <button onClick={onClose}>Close</button>
+    </div>
+  );
+}
+```
+
+### 4. Measuring Layout
+
+When you need to measure an element immediately after an update:
+
+```javascript
+import { flushSync } from 'react-dom';
+import { useState, useRef } from 'react';
+
+function ExpandableSection({ children }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const contentRef = useRef(null);
+  
+  const toggle = () => {
+    flushSync(() => {
+      setIsExpanded(!isExpanded);
+    });
+    
+    // Measure the new height immediately
+    if (contentRef.current) {
+      const height = contentRef.current.offsetHeight;
+      console.log('New height:', height);
+    }
+  };
+  
+  return (
+    <div>
+      <button onClick={toggle}>Toggle</button>
+      {isExpanded && <div ref={contentRef}>{children}</div>}
+    </div>
+  );
+}
+```
+
+### 5. Drag and Drop
+
+Ensure immediate updates during drag operations:
+
+```javascript
+import { flushSync } from 'react-dom';
+import { useState } from 'react';
+
+function DraggableList({ items }) {
+  const [list, setList] = useState(items);
+  const [draggedIndex, setDraggedIndex] = useState(null);
+  
+  const handleDrop = (targetIndex) => {
+    if (draggedIndex === null) return;
+    
+    const newList = [...list];
+    const [removed] = newList.splice(draggedIndex, 1);
+    newList.splice(targetIndex, 0, removed);
+    
+    // Update list immediately for smooth drag feedback
+    flushSync(() => {
+      setList(newList);
+      setDraggedIndex(null);
+    });
+  };
+  
+  return (
+    <div>
+      {list.map((item, index) => (
+        <div
+          key={item.id}
+          draggable
+          onDragStart={() => setDraggedIndex(index)}
+          onDrop={() => handleDrop(index)}
+          onDragOver={(e) => e.preventDefault()}
+        >
+          {item.name}
+        </div>
+      ))}
+    </div>
+  );
+}
+```
+
+## Performance Impact
+
+### How React Normally Works
+
+By default, React batches updates for performance:
+
+```javascript
+function Counter() {
+  const [count, setCount] = useState(0);
+  
+  const handleClick = () => {
+    // These are batched together
+    setCount(count + 1);
+    setCount(count + 2);
+    setCount(count + 3);
+    // React renders once with final value
+  };
+  
+  return <button onClick={handleClick}>{count}</button>;
+}
+```
+
+### With flushSync (Slower)
+
+```javascript
+function Counter() {
+  const [count, setCount] = useState(0);
+  
+  const handleClick = () => {
+    flushSync(() => {
+      setCount(count + 1);
+    });
+    // React renders here (render #1)
+    
+    flushSync(() => {
+      setCount(count + 2);
+    });
+    // React renders here (render #2)
+    
+    flushSync(() => {
+      setCount(count + 3);
+    });
+    // React renders here (render #3)
+    // Three renders instead of one!
+  };
+  
+  return <button onClick={handleClick}>{count}</button>;
+}
+```
+
+### Performance Comparison
+
+```javascript
+import { flushSync } from 'react-dom';
+import { useState } from 'react';
+
+function PerformanceTest() {
+  const [count, setCount] = useState(0);
+  
+  const normalUpdate = () => {
+    const start = performance.now();
+    
+    // Batched - fast
+    for (let i = 0; i < 1000; i++) {
+      setCount(i);
+    }
+    
+    const duration = performance.now() - start;
+    console.log('Normal:', duration, 'ms'); // ~1ms
+  };
+  
+  const syncUpdate = () => {
+    const start = performance.now();
+    
+    // Synchronous - slow
+    for (let i = 0; i < 1000; i++) {
+      flushSync(() => {
+        setCount(i);
+      });
+    }
+    
+    const duration = performance.now() - start;
+    console.log('Sync:', duration, 'ms'); // ~500ms!
+  };
+  
+  return (
+    <div>
+      <button onClick={normalUpdate}>Normal Update</button>
+      <button onClick={syncUpdate}>Sync Update</button>
+      <div>Count: {count}</div>
+    </div>
+  );
+}
+```
+
+## Common Pitfalls
+
+### 1. Using in Event Handlers (Usually Unnecessary)
+
+```javascript
+// Bad: flushSync not needed here
+function handleClick() {
+  flushSync(() => {
+    setCount(count + 1);
+  });
+}
+
+// Good: React batches automatically
+function handleClick() {
+  setCount(count + 1);
+}
+```
+
+### 2. Using in Effects
+
+```javascript
+// Bad: Can cause issues
+useEffect(() => {
+  flushSync(() => {
+    setState(value);
+  });
+}, [value]);
+
+// Good: Let React batch naturally
+useEffect(() => {
+  setState(value);
+}, [value]);
+```
+
+### 3. Nesting flushSync Calls
+
+```javascript
+// Bad: Very slow!
+flushSync(() => {
+  flushSync(() => {
+    setState(value);
+  });
+});
+
+// Good: Single flushSync
+flushSync(() => {
+  setState(value);
+});
+```
+
+### 4. Using for Animation
+
+```javascript
+// Bad: Causes jank
+for (let i = 0; i < 100; i++) {
+  flushSync(() => {
+    setPosition(i);
+  });
+}
+
+// Good: Use CSS animations or requestAnimationFrame
+function animate() {
+  let i = 0;
+  function step() {
+    setPosition(i++);
+    if (i < 100) {
+      requestAnimationFrame(step);
+    }
+  }
+  requestAnimationFrame(step);
+}
+```
+
+## Alternatives to flushSync
+
+### 1. Use Effects Instead
+
+```javascript
+// Instead of this:
+flushSync(() => {
+  setState(value);
+});
+measureElement();
+
+// Consider this:
+useEffect(() => {
+  measureElement();
+}, [value]);
+```
+
+### 2. Use Layout Effects
+
+```javascript
+import { useLayoutEffect } from 'react';
+
+// Runs synchronously after DOM updates
+useLayoutEffect(() => {
+  const width = divRef.current.offsetWidth;
+  setWidth(width);
+}, [dependency]);
+```
+
+### 3. Use Refs for Immediate Values
+
+```javascript
+import { useRef } from 'react';
+
+function Component() {
+  const countRef = useRef(0);
+  
+  const handleClick = () => {
+    // Immediate update without re-render
+    countRef.current += 1;
+    console.log(countRef.current); // Updated immediately
+  };
+}
+```
+
+### 4. Use Callback Refs
+
+```javascript
+function Component() {
+  const [height, setHeight] = useState(0);
+  
+  const measureRef = useCallback((node) => {
+    if (node !== null) {
+      setHeight(node.offsetHeight);
+    }
+  }, []);
+  
+  return <div ref={measureRef}>Content</div>;
+}
+```
+
+## TypeScript
+
+```typescript
+import { flushSync } from 'react-dom';
+import { useState } from 'react';
+
+function Component() {
+  const [count, setCount] = useState<number>(0);
+  
+  const handleUpdate = (): void => {
+    // Type-safe usage
+    flushSync(() => {
+      setCount(count + 1);
+    });
+    
+    // Or without callback
+    flushSync();
+  };
+  
+  return <button onClick={handleUpdate}>{count}</button>;
+}
+```
+
+## Testing
+
+```javascript
+import { render, screen, waitFor } from '@testing-library/react';
+import { flushSync } from 'react-dom';
+import userEvent from '@testing-library/user-event';
+
+test('updates synchronously', () => {
+  let count = 0;
+  
+  function Counter() {
+    const [value, setValue] = useState(0);
+    
+    return (
+      <button
+        onClick={() => {
+          flushSync(() => {
+            setValue(value + 1);
+          });
+          count = value + 1;
+        }}
+      >
+        {value}
+      </button>
+    );
+  }
+  
+  render(<Counter />);
+  const button = screen.getByRole('button');
+  
+  userEvent.click(button);
+  
+  // With flushSync, count is updated synchronously
+  expect(count).toBe(1);
+  expect(button).toHaveTextContent('1');
+});
+```
+
+## Debugging
+
+Enable logging to see when flushSync is called:
+
+```javascript
+import { flushSync } from 'react-dom';
+
+function logFlushSync(callback) {
+  console.log('[flushSync] Start');
+  const start = performance.now();
+  
+  flushSync(callback);
+  
+  const duration = performance.now() - start;
+  console.log(`[flushSync] End (${duration.toFixed(2)}ms)`);
+}
+
+// Usage
+logFlushSync(() => {
+  setState(newValue);
+});
+```
+
+## Strict Mode Compatibility
+
+`flushSync` works in Strict Mode but may cause warnings if used in render:
+
+```javascript
+function Component() {
+  // Warning: flushSync called during render!
+  flushSync(() => {
+    setState(value);
+  });
+  
+  return <div>Content</div>;
+}
+
+// Move to event handlers or effects instead
+function Component() {
+  const handleClick = () => {
+    flushSync(() => {
+      setState(value);
+    });
+  };
+  
+  return <button onClick={handleClick}>Click</button>;
+}
+```
+
+## Best Practices
+
+1. **Use sparingly** - Most apps don't need flushSync
+2. **Measure performance** - Profile before and after
+3. **Consider alternatives** - Effects, layout effects, refs
+4. **Document usage** - Explain why it's necessary
+5. **Avoid in loops** - Extremely slow
+6. **Test without it first** - May not be needed
+
+## Browser Compatibility
+
+Works in all browsers that support React:
+
+- Chrome 90+
+- Firefox 88+
+- Safari 14.1+
+- Edge 90+
+
+## Related APIs
+
+- [useLayoutEffect](/api/react/use-layout-effect) - Run effects synchronously after DOM updates
+- [useEffect](/api/react/use-effect) - Run effects asynchronously
+- [startTransition](/api/react/start-transition) - Mark updates as non-urgent (opposite of flushSync)
+- [createRoot](/api/react-dom/create-root) - Enable concurrent features

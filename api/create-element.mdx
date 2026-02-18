@@ -1,0 +1,476 @@
+---
+title: createElement, cloneElement & isValidElement
+description: APIs for creating and manipulating React elements programmatically
+---
+
+These APIs allow you to create and work with React elements programmatically. Most of the time you'll use JSX instead, but these functions are useful when working with element trees dynamically.
+
+## createElement()
+
+Create and return a new React element of the given type.
+
+```typescript
+function createElement(
+  type: string | ComponentType,
+  props?: object | null,
+  ...children: ReactNode[]
+): ReactElement
+```
+
+<ParamField path="type" type="string | ComponentType" required>
+  The type of element to create:
+  - A string for HTML elements (`'div'`, `'span'`, etc.)
+  - A React component (function or class)
+  - A React fragment (`React.Fragment`)
+  - Or other special types (Suspense, StrictMode, etc.)
+</ParamField>
+
+<ParamField path="props" type="object | null">
+  An object containing props to pass to the element. Can include:
+  - Any custom props
+  - `key` - String or number to identify the element in lists
+  - `ref` - Ref to access the underlying DOM node or component instance
+  - Special props like `className`, `style`, event handlers, etc.
+  
+  Pass `null` or omit if the element has no props.
+</ParamField>
+
+<ParamField path="...children" type="ReactNode">
+  Zero or more child elements. Can be:
+  - Other React elements
+  - Strings or numbers (rendered as text)
+  - `null`, `undefined`, or `false` (rendered as nothing)
+  - Arrays of any of the above
+</ParamField>
+
+**Returns:** A React element object.
+
+### Usage
+
+**Basic element creation:**
+
+```javascript
+import { createElement } from 'react';
+
+// Equivalent to: <div>Hello</div>
+const element = createElement('div', null, 'Hello');
+
+// Equivalent to: <h1 className="title">Welcome</h1>
+const heading = createElement('h1', { className: 'title' }, 'Welcome');
+```
+
+**Multiple children:**
+
+```javascript
+// Equivalent to: <div><h1>Title</h1><p>Content</p></div>
+const container = createElement(
+  'div',
+  null,
+  createElement('h1', null, 'Title'),
+  createElement('p', null, 'Content')
+);
+```
+
+**Component creation:**
+
+```javascript
+function Greeting({ name }) {
+  return <h1>Hello, {name}!</h1>;
+}
+
+// Equivalent to: <Greeting name="World" />
+const greeting = createElement(Greeting, { name: 'World' });
+```
+
+**With key and ref:**
+
+```javascript
+import { createRef } from 'react';
+
+const ref = createRef();
+
+const element = createElement(
+  'input',
+  { 
+    key: 'input-1',
+    ref: ref,
+    type: 'text',
+    placeholder: 'Enter text'
+  }
+);
+```
+
+**Dynamic element creation:**
+
+```javascript
+function renderList(items) {
+  return createElement(
+    'ul',
+    null,
+    items.map((item, index) =>
+      createElement('li', { key: index }, item)
+    )
+  );
+}
+```
+
+### Default Props
+
+If the component has `defaultProps` defined, `createElement` will merge them with the provided props:
+
+```javascript
+function Button({ color, text }) {
+  return <button style={{ color }}>{text}</button>;
+}
+
+Button.defaultProps = {
+  color: 'blue',
+  text: 'Click me'
+};
+
+// Uses default color='blue'
+const button1 = createElement(Button, { text: 'Submit' });
+
+// Overrides default with color='red'
+const button2 = createElement(Button, { color: 'red', text: 'Delete' });
+```
+
+### Special Props
+
+<Note>
+These props have special meaning to React:
+
+- `key` - Used to identify elements in lists (not accessible via `props.key`)
+- `ref` - Used to access DOM nodes or component instances (treated specially in React 19+)
+- `__self` and `__source` - Used internally by React DevTools (should not be used in application code)
+</Note>
+
+### JSX Transformation
+
+JSX is transformed to `createElement` calls by the compiler:
+
+```javascript
+// JSX
+<div className="container">
+  <h1>Hello</h1>
+  <p>World</p>
+</div>
+
+// Compiled to (classic runtime)
+React.createElement(
+  'div',
+  { className: 'container' },
+  React.createElement('h1', null, 'Hello'),
+  React.createElement('p', null, 'World')
+);
+```
+
+<Warning>
+React 17+ uses a new JSX transform that doesn't require `React.createElement`. The above transformation only applies to the classic JSX runtime.
+</Warning>
+
+## cloneElement()
+
+Clone and return a new React element using an existing element as the starting point.
+
+```typescript
+function cloneElement(
+  element: ReactElement,
+  props?: object | null,
+  ...children: ReactNode[]
+): ReactElement
+```
+
+<ParamField path="element" type="ReactElement" required>
+  The React element to clone. Must be a valid React element, not `null` or `undefined`.
+</ParamField>
+
+<ParamField path="props" type="object | null">
+  Props to merge with the original element's props. Props from this object will override props from the original element.
+  
+  - `key` and `ref` can be overridden
+  - If `ref` is provided, the owner will be updated
+  - `undefined` ref values are ignored (original ref is preserved)
+</ParamField>
+
+<ParamField path="...children" type="ReactNode">
+  Zero or more children to replace the original element's children. If provided, these completely replace the original children.
+</ParamField>
+
+**Returns:** A new React element with merged props and replaced children (if provided).
+
+**Throws:** `Error` if the element argument is `null` or `undefined`.
+
+### Usage
+
+**Basic cloning:**
+
+```javascript
+import { cloneElement } from 'react';
+
+const original = <button className="btn">Click me</button>;
+
+// Add additional props
+const cloned = cloneElement(original, { disabled: true });
+// Result: <button className="btn" disabled>Click me</button>
+```
+
+**Overriding props:**
+
+```javascript
+const original = <input type="text" defaultValue="Hello" />;
+
+// Override defaultValue
+const cloned = cloneElement(original, { defaultValue: "World" });
+// Result: <input type="text" defaultValue="World" />
+```
+
+**Replacing children:**
+
+```javascript
+const original = <div><p>Old content</p></div>;
+
+// Replace children
+const cloned = cloneElement(original, null, <p>New content</p>);
+// Result: <div><p>New content</p></div>
+```
+
+**Adding props to children:**
+
+```javascript
+function AddPropsToChildren({ children, color }) {
+  return (
+    <>
+      {React.Children.map(children, child =>
+        cloneElement(child, { style: { color } })
+      )}
+    </>
+  );
+}
+
+// Usage:
+<AddPropsToChildren color="red">
+  <div>This will be red</div>
+  <span>This too</span>
+</AddPropsToChildren>
+```
+
+**Preserving keys:**
+
+```javascript
+// Original element with key
+const original = <li key="item-1">Item</li>;
+
+// Clone preserves key unless explicitly overridden
+const cloned = cloneElement(original, { className: "active" });
+// Result: <li key="item-1" className="active">Item</li>
+```
+
+**Handling refs:**
+
+```javascript
+import { createRef, cloneElement } from 'react';
+
+const ref1 = createRef();
+const ref2 = createRef();
+
+const original = <input ref={ref1} />;
+
+// Cloning with new ref updates the owner
+const cloned = cloneElement(original, { ref: ref2 });
+// Now cloned element uses ref2 instead of ref1
+```
+
+### When to Use cloneElement
+
+**Use `cloneElement` when:**
+
+- You need to inject props into children passed as `props.children`
+- You're building higher-order components or component wrappers
+- You need to modify or enhance existing elements
+
+**Prefer alternatives when:**
+
+- You can pass props directly to components (more explicit)
+- You can use render props or context (more maintainable)
+- You're just creating new elements (use `createElement` or JSX)
+
+<Warning>
+`cloneElement` is somewhat rare in modern React code. Consider using render props, context, or composition patterns instead when possible, as they're often more maintainable.
+</Warning>
+
+### Example: Enhancing Children
+
+```javascript
+function TabPanel({ active, children }) {
+  return (
+    <>
+      {React.Children.map(children, (child, index) => {
+        return cloneElement(child, {
+          active: index === active,
+          key: index
+        });
+      })}
+    </>
+  );
+}
+
+function Tab({ active, children }) {
+  return (
+    <div className={active ? 'tab-active' : 'tab'}>
+      {children}
+    </div>
+  );
+}
+
+// Usage
+<TabPanel active={0}>
+  <Tab>First Tab</Tab>
+  <Tab>Second Tab</Tab>
+  <Tab>Third Tab</Tab>
+</TabPanel>
+```
+
+## isValidElement()
+
+Verify whether an object is a React element.
+
+```typescript
+function isValidElement(object: any): boolean
+```
+
+<ParamField path="object" type="any" required>
+  Any JavaScript value to test.
+</ParamField>
+
+**Returns:** `true` if the object is a valid React element, `false` otherwise.
+
+### Usage
+
+**Basic validation:**
+
+```javascript
+import { isValidElement } from 'react';
+
+console.log(isValidElement(<div />));                // true
+console.log(isValidElement(createElement('div')));   // true
+console.log(isValidElement('hello'));                // false
+console.log(isValidElement(123));                    // false
+console.log(isValidElement(null));                   // false
+console.log(isValidElement({ type: 'div' }));        // false (plain object)
+```
+
+**Type checking in functions:**
+
+```javascript
+function renderItem(item) {
+  if (isValidElement(item)) {
+    return item;
+  }
+  return <div>{item}</div>;
+}
+
+renderItem(<span>Hello</span>); // Returns the element as-is
+renderItem('Hello');             // Wraps in <div>
+```
+
+**Filtering elements:**
+
+```javascript
+function extractElements(items) {
+  return items.filter(isValidElement);
+}
+
+const mixed = [
+  <div>Element 1</div>,
+  'just text',
+  <span>Element 2</span>,
+  42,
+  null
+];
+
+const elements = extractElements(mixed);
+// Result: [<div>Element 1</div>, <span>Element 2</span>]
+```
+
+**Conditional rendering helper:**
+
+```javascript
+function Wrapper({ children, fallback }) {
+  if (!children || !isValidElement(children)) {
+    return fallback;
+  }
+  return <div className="wrapper">{children}</div>;
+}
+
+// Usage
+<Wrapper fallback={<div>No content</div>}>
+  <p>This is valid content</p>
+</Wrapper>
+```
+
+### What Makes a Valid Element
+
+A valid React element is an object with:
+
+```javascript
+{
+  $$typeof: Symbol.for('react.transitional.element'),
+  type: ...,      // Component or tag name
+  props: ...,     // Props object
+  key: ...,       // Key (if provided)
+  // ... other internal properties
+}
+```
+
+These objects are created by:
+- JSX syntax: `<div />`
+- `createElement()`: `createElement('div')`
+- `cloneElement()`: `cloneElement(element)`
+
+### Common Use Cases
+
+**Validating props.children:**
+
+```javascript
+function SingleChild({ children }) {
+  if (!isValidElement(children)) {
+    throw new Error('SingleChild requires a single React element as child');
+  }
+  return children;
+}
+```
+
+**Building flexible APIs:**
+
+```javascript
+function Icon({ icon }) {
+  // Accept either an element or a string
+  if (isValidElement(icon)) {
+    return icon;
+  }
+  return <i className={`icon-${icon}`} />;
+}
+
+// Both work:
+<Icon icon="star" />
+<Icon icon={<CustomStar />} />
+```
+
+**Safe element manipulation:**
+
+```javascript
+function enhanceChild(child) {
+  if (!isValidElement(child)) {
+    return child; // Return non-elements as-is
+  }
+  
+  return cloneElement(child, {
+    className: 'enhanced'
+  });
+}
+```
+
+<Note>
+`isValidElement` only checks if something is a React element. It doesn't validate if the element type is correct, if props are valid, or if the element will render successfully.
+</Note>

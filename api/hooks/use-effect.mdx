@@ -1,0 +1,492 @@
+---
+title: useEffect
+description: Synchronize a component with an external system
+---
+
+`useEffect` is a React Hook that lets you synchronize a component with an external system.
+
+```typescript
+function useEffect(
+  effect: () => (() => void) | void,
+  deps?: Array<mixed> | void | null
+): void
+```
+
+## Parameters
+
+<ParamField path="effect" type="() => (() => void) | void" required>
+  The function with your Effect's logic. Your effect function can optionally return a **cleanup function**.
+  
+  - React will call your effect function after the component is added to the screen (after render)
+  - React will call your cleanup function (if provided) before the component is removed from the screen
+  - If dependencies change, React will first call the cleanup function with old values, then call the effect function with new values
+  
+  Your effect function should be pure and should not take any arguments.
+</ParamField>
+
+<ParamField path="deps" type="Array<mixed> | void | null">
+  The list of all reactive values referenced inside the effect code.
+  
+  - If omitted, the effect runs after every render
+  - If `[]` (empty array), the effect runs only once (on mount)
+  - If `[dep1, dep2]`, the effect runs when any dependency changes
+  
+  React will compare each dependency with its previous value using `Object.is`.
+</ParamField>
+
+## Returns
+
+`useEffect` returns `undefined`.
+
+## Usage
+
+### Connecting to an external system
+
+Some components need to stay connected to external systems while they're displayed:
+
+```javascript
+import { useEffect, useState } from 'react';
+
+function ChatRoom({ roomId }) {
+  const [serverUrl, setServerUrl] = useState('https://localhost:1234');
+  
+  useEffect(() => {
+    const connection = createConnection(serverUrl, roomId);
+    connection.connect();
+    
+    // Cleanup function
+    return () => {
+      connection.disconnect();
+    };
+  }, [serverUrl, roomId]); // Re-connect if these change
+  
+  return <div>Connected to {roomId}</div>;
+}
+```
+
+### Fetching data
+
+```javascript
+function UserProfile({ userId }) {
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  
+  useEffect(() => {
+    let cancelled = false;
+    
+    async function fetchUser() {
+      setLoading(true);
+      try {
+        const response = await fetch(`/api/users/${userId}`);
+        const data = await response.json();
+        if (!cancelled) {
+          setUser(data);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+    
+    fetchUser();
+    
+    // Cleanup to prevent state updates if component unmounts
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+  
+  if (loading) return <div>Loading...</div>;
+  return <div>{user?.name}</div>;
+}
+```
+
+<Note>
+In React 18+, consider using Suspense for data fetching, or use a data fetching library like React Query, SWR, or Redux Toolkit Query instead of manually managing loading states.
+</Note>
+
+### Subscribing to events
+
+```javascript
+function WindowSize() {
+  const [width, setWidth] = useState(window.innerWidth);
+  
+  useEffect(() => {
+    function handleResize() {
+      setWidth(window.innerWidth);
+    }
+    
+    window.addEventListener('resize', handleResize);
+    
+    // Cleanup: Remove event listener
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, []); // Empty deps = run once on mount
+  
+  return <div>Width: {width}px</div>;
+}
+```
+
+### Running once on mount
+
+Pass an empty dependency array to run the effect only once:
+
+```javascript
+function App() {
+  useEffect(() => {
+    console.log('Component mounted');
+    
+    return () => {
+      console.log('Component unmounted');
+    };
+  }, []); // Empty array = run only on mount/unmount
+  
+  return <div>App</div>;
+}
+```
+
+<Warning>
+In development with Strict Mode, React will run effects twice to help you find bugs. This is intentional and only happens in development.
+</Warning>
+
+### Effect dependencies
+
+<Tabs>
+  <Tab title="No dependencies">
+    ```javascript
+    // Runs after every render
+    useEffect(() => {
+      console.log('Rendered!');
+    });
+    ```
+  </Tab>
+  <Tab title="Empty array">
+    ```javascript
+    // Runs only once (mount)
+    useEffect(() => {
+      console.log('Mounted!');
+    }, []);
+    ```
+  </Tab>
+  <Tab title="With dependencies">
+    ```javascript
+    // Runs when count or name changes
+    useEffect(() => {
+      console.log(`Count: ${count}, Name: ${name}`);
+    }, [count, name]);
+    ```
+  </Tab>
+</Tabs>
+
+### Cleanup function
+
+The cleanup function runs:
+1. Before the effect runs again (if dependencies changed)
+2. When the component unmounts
+
+```javascript
+useEffect(() => {
+  const timer = setTimeout(() => {
+    console.log('Timer fired');
+  }, 1000);
+  
+  // Cleanup: Clear the timer
+  return () => {
+    clearTimeout(timer);
+  };
+}, []);
+```
+
+## Common Use Cases
+
+### Updating document title
+
+```javascript
+function PageTitle({ title }) {
+  useEffect(() => {
+    document.title = title;
+  }, [title]);
+  
+  return null;
+}
+```
+
+### Working with intervals
+
+```javascript
+function Timer() {
+  const [seconds, setSeconds] = useState(0);
+  
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setSeconds(s => s + 1);
+    }, 1000);
+    
+    return () => clearInterval(interval);
+  }, []);
+  
+  return <div>Seconds: {seconds}</div>;
+}
+```
+
+### Local storage sync
+
+```javascript
+function useLocalStorage(key, initialValue) {
+  const [value, setValue] = useState(() => {
+    const saved = localStorage.getItem(key);
+    return saved !== null ? JSON.parse(saved) : initialValue;
+  });
+  
+  useEffect(() => {
+    localStorage.setItem(key, JSON.stringify(value));
+  }, [key, value]);
+  
+  return [value, setValue];
+}
+```
+
+### Triggering animations
+
+```javascript
+function FadeIn({ children }) {
+  const ref = useRef();
+  
+  useEffect(() => {
+    const element = ref.current;
+    element.style.opacity = '0';
+    
+    const animation = element.animate(
+      [{ opacity: 0 }, { opacity: 1 }],
+      { duration: 500 }
+    );
+    
+    animation.onfinish = () => {
+      element.style.opacity = '1';
+    };
+    
+    return () => animation.cancel();
+  }, []);
+  
+  return <div ref={ref}>{children}</div>;
+}
+```
+
+## TypeScript
+
+```typescript
+// Effect with no return (no cleanup)
+useEffect(() => {
+  console.log('No cleanup');
+}, []);
+
+// Effect with cleanup
+useEffect((): (() => void) => {
+  const subscription = subscribe();
+  return () => {
+    subscription.unsubscribe();
+  };
+}, []);
+
+// Effect with typed dependencies
+interface Props {
+  userId: string;
+}
+
+function Component({ userId }: Props) {
+  useEffect(() => {
+    fetchUser(userId);
+  }, [userId]);
+}
+```
+
+## Troubleshooting
+
+### My effect runs twice on mount
+
+In development with Strict Mode, React intentionally runs effects twice to help find bugs:
+
+```javascript
+useEffect(() => {
+  console.log('Mount'); // Logs twice in dev
+  return () => console.log('Cleanup'); // Runs between mounts in dev
+}, []);
+```
+
+This is intentional and only happens in development. Make sure your cleanup function properly cleans up what your effect does.
+
+### My effect runs on every render
+
+This happens when you forget the dependency array or include values that change on every render:
+
+```javascript
+// ❌ Missing deps array - runs every render
+useEffect(() => {
+  fetchData();
+});
+
+// ❌ Object/array created in render - runs every render
+function Component() {
+  const options = { limit: 10 }; // New object every render
+  
+  useEffect(() => {
+    fetchData(options);
+  }, [options]); // options changes every render!
+}
+
+// ✅ Move object outside or use useMemo
+const options = useMemo(() => ({ limit: 10 }), []);
+useEffect(() => {
+  fetchData(options);
+}, [options]);
+```
+
+### My effect depends on a function
+
+Functions created in the component body are new on every render:
+
+```javascript
+// ❌ Function created in render
+function Component() {
+  function fetchData() {
+    // ...
+  }
+  
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]); // fetchData changes every render!
+}
+
+// ✅ Move function into effect
+useEffect(() => {
+  function fetchData() {
+    // ...
+  }
+  fetchData();
+}, []);
+
+// ✅ Or use useCallback
+const fetchData = useCallback(() => {
+  // ...
+}, []);
+
+useEffect(() => {
+  fetchData();
+}, [fetchData]);
+```
+
+### Infinite loop
+
+If your effect updates state that it also depends on:
+
+```javascript
+// ❌ Infinite loop
+const [count, setCount] = useState(0);
+
+useEffect(() => {
+  setCount(count + 1); // Updates count
+}, [count]); // Re-runs when count changes!
+
+// ✅ Use updater function if needed
+useEffect(() => {
+  setCount(c => c + 1);
+}, []); // Only runs once
+```
+
+### Effect uses stale state
+
+If you omit dependencies, the effect will use stale values:
+
+```javascript
+function Component() {
+  const [count, setCount] = useState(0);
+  
+  useEffect(() => {
+    const interval = setInterval(() => {
+      console.log(count); // Always logs 0!
+    }, 1000);
+    
+    return () => clearInterval(interval);
+  }, []); // ❌ Missing count dependency
+}
+
+// ✅ Use updater function instead
+useEffect(() => {
+  const interval = setInterval(() => {
+    setCount(c => {
+      console.log(c); // Current count
+      return c;
+    });
+  }, 1000);
+  
+  return () => clearInterval(interval);
+}, []);
+```
+
+## When NOT to use useEffect
+
+### Transforming data for rendering
+
+```javascript
+// ❌ Don't use effect for transforming data
+function Component({ items }) {
+  const [filtered, setFiltered] = useState([]);
+  
+  useEffect(() => {
+    setFiltered(items.filter(item => item.active));
+  }, [items]);
+}
+
+// ✅ Calculate during render
+function Component({ items }) {
+  const filtered = items.filter(item => item.active);
+  // Or use useMemo if expensive
+}
+```
+
+### Handling user events
+
+```javascript
+// ❌ Don't use effect for event handling
+function Component() {
+  const [clicked, setClicked] = useState(false);
+  
+  useEffect(() => {
+    if (clicked) {
+      submitForm();
+      setClicked(false);
+    }
+  }, [clicked]);
+  
+  return <button onClick={() => setClicked(true)}>Submit</button>;
+}
+
+// ✅ Use event handler directly
+function Component() {
+  function handleClick() {
+    submitForm();
+  }
+  
+  return <button onClick={handleClick}>Submit</button>;
+}
+```
+
+### Initializing state
+
+```javascript
+// ❌ Don't use effect to initialize state
+function Component() {
+  const [data, setData] = useState(null);
+  
+  useEffect(() => {
+    setData(computeInitialData());
+  }, []);
+}
+
+// ✅ Initialize state directly
+function Component() {
+  const [data, setData] = useState(() => computeInitialData());
+}
+```

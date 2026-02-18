@@ -1,0 +1,576 @@
+---
+title: useTransition
+description: Mark state updates as non-urgent transitions
+---
+
+`useTransition` is a React Hook that lets you update the state without blocking the UI.
+
+```typescript
+function useTransition(): [
+  boolean,
+  (callback: () => void, options?: StartTransitionOptions) => void
+]
+```
+
+## Parameters
+
+`useTransition` does not take any parameters.
+
+## Returns
+
+`useTransition` returns an array with exactly two values:
+
+<ResponseField name="[0]" type="boolean">
+  The `isPending` flag that tells you whether there is a pending transition.
+</ResponseField>
+
+<ResponseField name="[1]" type="(callback: () => void, options?: StartTransitionOptions) => void">
+  The `startTransition` function that lets you mark a state update as a transition.
+  
+  - `callback`: A function that updates state. React will immediately call this function, marking all state updates scheduled synchronously during this function call as transitions.
+  - `options`: Optional object with a `name` property (string) for debugging in React DevTools.
+</ResponseField>
+
+## Usage
+
+### Marking a state update as a non-blocking transition
+
+Call `useTransition` at the top level of your component to mark state updates as transitions:
+
+```javascript
+import { useState, useTransition } from 'react';
+
+function TabContainer() {
+  const [isPending, startTransition] = useTransition();
+  const [tab, setTab] = useState('about');
+  
+  function selectTab(nextTab) {
+    startTransition(() => {
+      setTab(nextTab);
+    });
+  }
+  
+  return (
+    <>
+      <button onClick={() => selectTab('about')}>
+        About {tab === 'about' && isPending && '(Loading...)'}
+      </button>
+      <button onClick={() => selectTab('posts')}>
+        Posts {tab === 'posts' && isPending && '(Loading...)'}
+      </button>
+      <button onClick={() => selectTab('contact')}>
+        Contact {tab === 'contact' && isPending && '(Loading...)'}
+      </button>
+      
+      {tab === 'about' && <AboutTab />}
+      {tab === 'posts' && <PostsTab />}
+      {tab === 'contact' && <ContactTab />}
+    </>
+  );
+}
+```
+
+### Updating the parent component in a transition
+
+You can call `startTransition` from a child component to update parent state:
+
+```javascript
+function TabButton({ children, onClick }) {
+  const [isPending, startTransition] = useTransition();
+  
+  function handleClick() {
+    startTransition(() => {
+      onClick();
+    });
+  }
+  
+  return (
+    <button onClick={handleClick} disabled={isPending}>
+      {children}
+    </button>
+  );
+}
+
+function TabContainer() {
+  const [tab, setTab] = useState('about');
+  
+  return (
+    <>
+      <TabButton onClick={() => setTab('about')}>About</TabButton>
+      <TabButton onClick={() => setTab('posts')}>Posts</TabButton>
+      <TabButton onClick={() => setTab('contact')}>Contact</TabButton>
+      
+      <hr />
+      {tab === 'about' && <AboutTab />}
+      {tab === 'posts' && <PostsTab />}
+      {tab === 'contact' && <ContactTab />}
+    </>
+  );
+}
+```
+
+### Displaying a pending visual state during the transition
+
+Show loading indicators while the transition is pending:
+
+```javascript
+function App() {
+  const [isPending, startTransition] = useTransition();
+  const [page, setPage] = useState('home');
+  
+  function navigate(nextPage) {
+    startTransition(() => {
+      setPage(nextPage);
+    });
+  }
+  
+  return (
+    <div style={{ opacity: isPending ? 0.7 : 1 }}>
+      <nav>
+        <button onClick={() => navigate('home')}>Home</button>
+        <button onClick={() => navigate('about')}>About</button>
+        <button onClick={() => navigate('products')}>Products</button>
+      </nav>
+      
+      {isPending && <Spinner />}
+      
+      {page === 'home' && <HomePage />}
+      {page === 'about' && <AboutPage />}
+      {page === 'products' && <ProductsPage />}
+    </div>
+  );
+}
+```
+
+### Preventing unwanted loading indicators
+
+In this example, the `PostsTab` component fetches data using Suspense. When you click the "Posts" tab, it immediately shows a pending state:
+
+```javascript
+function PostsTab() {
+  const posts = use(fetchPosts());
+  return (
+    <ul>
+      {posts.map(post => (
+        <li key={post.id}>{post.title}</li>
+      ))}
+    </ul>
+  );
+}
+
+function TabContainer() {
+  const [isPending, startTransition] = useTransition();
+  const [tab, setTab] = useState('about');
+  
+  function selectTab(nextTab) {
+    startTransition(() => {
+      setTab(nextTab);
+    });
+  }
+  
+  return (
+    <Suspense fallback={<h1>Loading...</h1>}>
+      <button onClick={() => selectTab('about')}>About</button>
+      <button onClick={() => selectTab('posts')}>Posts</button>
+      
+      {isPending ? (
+        <div>Loading tab...</div>
+      ) : (
+        <>
+          {tab === 'about' && <AboutTab />}
+          {tab === 'posts' && <PostsTab />}
+        </>
+      )}
+    </Suspense>
+  );
+}
+```
+
+## Common Patterns
+
+### Search with transitions
+
+<Tabs>
+  <Tab title="Basic">
+    ```javascript
+    function SearchPage() {
+      const [isPending, startTransition] = useTransition();
+      const [query, setQuery] = useState('');
+      const [results, setResults] = useState([]);
+      
+      function handleSearch(value) {
+        setQuery(value); // Urgent: update input
+        startTransition(() => {
+          // Non-urgent: update results
+          setResults(searchItems(value));
+        });
+      }
+      
+      return (
+        <>
+          <input
+            value={query}
+            onChange={e => handleSearch(e.target.value)}
+          />
+          {isPending && <div>Searching...</div>}
+          <SearchResults results={results} />
+        </>
+      );
+    }
+    ```
+  </Tab>
+  <Tab title="With Debounce">
+    ```javascript
+    function SearchPage() {
+      const [isPending, startTransition] = useTransition();
+      const [query, setQuery] = useState('');
+      const [results, setResults] = useState([]);
+      const timeoutRef = useRef(null);
+      
+      function handleSearch(value) {
+        setQuery(value);
+        
+        // Clear existing timeout
+        clearTimeout(timeoutRef.current);
+        
+        // Debounce the search
+        timeoutRef.current = setTimeout(() => {
+          startTransition(() => {
+            setResults(searchItems(value));
+          });
+        }, 300);
+      }
+      
+      return (
+        <>
+          <input
+            value={query}
+            onChange={e => handleSearch(e.target.value)}
+          />
+          {isPending && <Spinner />}
+          <SearchResults results={results} />
+        </>
+      );
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### Navigation with transitions
+
+```javascript
+function Router() {
+  const [isPending, startTransition] = useTransition();
+  const [currentPage, setCurrentPage] = useState('/');
+  
+  function navigate(url) {
+    startTransition(() => {
+      setCurrentPage(url);
+    });
+  }
+  
+  return (
+    <div className={isPending ? 'loading' : ''}>
+      <nav>
+        <a href="/" onClick={e => { e.preventDefault(); navigate('/'); }}>
+          Home
+        </a>
+        <a href="/about" onClick={e => { e.preventDefault(); navigate('/about'); }}>
+          About
+        </a>
+      </nav>
+      
+      {isPending && <LoadingBar />}
+      
+      <main>
+        {currentPage === '/' && <HomePage />}
+        {currentPage === '/about' && <AboutPage />}
+      </main>
+    </div>
+  );
+}
+```
+
+### Form submission with transitions
+
+```javascript
+function ContactForm() {
+  const [isPending, startTransition] = useTransition();
+  const [status, setStatus] = useState('idle');
+  
+  function handleSubmit(e) {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    
+    startTransition(async () => {
+      try {
+        await submitForm(formData);
+        setStatus('success');
+      } catch (error) {
+        setStatus('error');
+      }
+    });
+  }
+  
+  return (
+    <form onSubmit={handleSubmit}>
+      <input name="name" required />
+      <input name="email" type="email" required />
+      <textarea name="message" required />
+      
+      <button type="submit" disabled={isPending}>
+        {isPending ? 'Submitting...' : 'Submit'}
+      </button>
+      
+      {status === 'success' && <div>Form submitted!</div>}
+      {status === 'error' && <div>Error submitting form</div>}
+    </form>
+  );
+}
+```
+
+### Filtering with transitions
+
+```javascript
+function ProductList({ products }) {
+  const [isPending, startTransition] = useTransition();
+  const [filter, setFilter] = useState('');
+  const [filteredProducts, setFilteredProducts] = useState(products);
+  
+  function handleFilterChange(value) {
+    setFilter(value); // Urgent: update input
+    
+    startTransition(() => {
+      // Non-urgent: filter products
+      const filtered = products.filter(p =>
+        p.name.toLowerCase().includes(value.toLowerCase())
+      );
+      setFilteredProducts(filtered);
+    });
+  }
+  
+  return (
+    <>
+      <input
+        value={filter}
+        onChange={e => handleFilterChange(e.target.value)}
+        placeholder="Filter products..."
+      />
+      
+      <div style={{ opacity: isPending ? 0.6 : 1 }}>
+        {filteredProducts.map(product => (
+          <ProductCard key={product.id} product={product} />
+        ))}
+      </div>
+    </>
+  );
+}
+```
+
+## TypeScript
+
+```typescript
+import { useState, useTransition } from 'react';
+
+function TabContainer() {
+  const [isPending, startTransition] = useTransition();
+  const [tab, setTab] = useState<'about' | 'posts' | 'contact'>('about');
+  
+  function selectTab(nextTab: 'about' | 'posts' | 'contact') {
+    startTransition(() => {
+      setTab(nextTab);
+    });
+  }
+  
+  return (
+    <>
+      <button onClick={() => selectTab('about')}>About</button>
+      <button onClick={() => selectTab('posts')}>Posts</button>
+      <button onClick={() => selectTab('contact')}>Contact</button>
+    </>
+  );
+}
+
+// With options
+function Component() {
+  const [isPending, startTransition] = useTransition();
+  
+  function handleUpdate() {
+    startTransition(() => {
+      // State updates
+    }, { name: 'update-transition' });
+  }
+}
+```
+
+## Troubleshooting
+
+### Updating an input in a transition doesn't work
+
+You can't use transitions for state that controls an input:
+
+```javascript
+// ❌ Input feels sluggish
+function SearchBox() {
+  const [isPending, startTransition] = useTransition();
+  const [text, setText] = useState('');
+  
+  function handleChange(e) {
+    startTransition(() => {
+      setText(e.target.value); // Don't defer input updates!
+    });
+  }
+  
+  return <input value={text} onChange={handleChange} />;
+}
+
+// ✅ Keep input responsive
+function SearchBox() {
+  const [isPending, startTransition] = useTransition();
+  const [text, setText] = useState('');
+  const [deferredText, setDeferredText] = useState('');
+  
+  function handleChange(e) {
+    setText(e.target.value); // Urgent: update input
+    startTransition(() => {
+      setDeferredText(e.target.value); // Non-urgent: update results
+    });
+  }
+  
+  return (
+    <>
+      <input value={text} onChange={handleChange} />
+      <Results query={deferredText} />
+    </>
+  );
+}
+```
+
+### React doesn't treat my state update as a transition
+
+Make sure the state update is inside the `startTransition` callback:
+
+```javascript
+// ❌ State update outside transition
+startTransition(() => {
+  // Some sync work
+});
+setState(newValue); // Not in transition!
+
+// ✅ State update inside transition
+startTransition(() => {
+  setTab(nextTab);
+});
+```
+
+### My transition never finishes
+
+Transitions that involve async work might not show as pending:
+
+```javascript
+// ❌ Async setState not tracked
+startTransition(async () => {
+  const data = await fetchData();
+  setData(data); // isPending is already false
+});
+
+// ✅ Track async work separately
+const [isLoading, setIsLoading] = useState(false);
+
+startTransition(() => {
+  setIsLoading(true);
+});
+
+fetchData().then(data => {
+  startTransition(() => {
+    setData(data);
+    setIsLoading(false);
+  });
+});
+```
+
+## useTransition vs useDeferredValue
+
+| Feature | useTransition | useDeferredValue |
+|---------|---------------|------------------|
+| Control | You trigger updates | React defers values |
+| Use case | When you own the state | When you receive props |
+| Pending state | `isPending` flag | Compare values |
+| Syntax | Wrap in `startTransition` | Wrap value |
+
+```javascript
+// useTransition: You control the update
+function Tabs() {
+  const [isPending, startTransition] = useTransition();
+  const [tab, setTab] = useState('home');
+  
+  function switchTab(next) {
+    startTransition(() => {
+      setTab(next);
+    });
+  }
+}
+
+// useDeferredValue: Defer a prop or value
+function Tabs({ tab }) {
+  const deferredTab = useDeferredValue(tab);
+  const isPending = tab !== deferredTab;
+  
+  return <TabContent tab={deferredTab} />;
+}
+```
+
+## Best Practices
+
+### Keep urgent updates outside transitions
+
+```javascript
+function Component() {
+  const [isPending, startTransition] = useTransition();
+  const [input, setInput] = useState('');
+  const [results, setResults] = useState([]);
+  
+  function handleChange(e) {
+    setInput(e.target.value); // Urgent
+    
+    startTransition(() => {
+      setResults(search(e.target.value)); // Non-urgent
+    });
+  }
+}
+```
+
+### Use meaningful loading states
+
+```javascript
+function Component() {
+  const [isPending, startTransition] = useTransition();
+  
+  return (
+    <div>
+      {isPending ? (
+        <div>Loading new content...</div>
+      ) : (
+        <Content />
+      )}
+    </div>
+  );
+}
+```
+
+### Combine with Suspense
+
+```javascript
+function App() {
+  const [isPending, startTransition] = useTransition();
+  const [page, setPage] = useState('home');
+  
+  return (
+    <Suspense fallback={<Spinner />}>
+      {isPending && <div>Transitioning...</div>}
+      {page === 'home' && <HomePage />}
+      {page === 'profile' && <ProfilePage />}
+    </Suspense>
+  );
+}
+```

@@ -1,0 +1,449 @@
+---
+title: Refs and the DOM
+description: Access and manipulate DOM nodes and React elements imperatively using refs and forwardRef.
+---
+
+## Overview
+
+Refs provide a way to access DOM nodes or React elements created in the render method. They're useful for managing focus, text selection, media playback, triggering animations, and integrating with third-party DOM libraries.
+
+## Creating Refs
+
+### Using useRef Hook
+
+The `useRef` hook is the modern way to create refs in function components:
+
+```javascript
+import { useRef } from 'react';
+
+function TextInput() {
+  const inputRef = useRef(null);
+  
+  const focusInput = () => {
+    inputRef.current.focus();
+  };
+  
+  return (
+    <div>
+      <input ref={inputRef} type="text" />
+      <button onClick={focusInput}>Focus Input</button>
+    </div>
+  );
+}
+```
+
+### API Signature
+
+From `packages/react/src/ReactHooks.js:82`:
+
+```javascript
+function useRef<T>(initialValue: T): { current: T }
+```
+
+The hook returns a mutable ref object whose `.current` property is initialized to the passed argument.
+
+### Using createRef (Class Components)
+
+From `packages/react/src/ReactCreateRef.js`:
+
+```javascript
+import { createRef, Component } from 'react';
+
+class TextInput extends Component {
+  constructor(props) {
+    super(props);
+    this.inputRef = createRef();
+  }
+  
+  focusInput = () => {
+    this.inputRef.current.focus();
+  };
+  
+  render() {
+    return (
+      <div>
+        <input ref={this.inputRef} type="text" />
+        <button onClick={this.focusInput}>Focus Input</button>
+      </div>
+    );
+  }
+}
+```
+
+## Forwarding Refs
+
+ForwardRef allows components to pass refs through to their children. This is useful when building reusable component libraries.
+
+### API Signature
+
+From `packages/react/src/ReactForwardRef.js:12`:
+
+```javascript
+function forwardRef<Props, ElementType>(
+  render: (props: Props, ref: React$RefSetter<React$ElementRef<ElementType>>) => React$Node
+)
+```
+
+### Basic Example
+
+```javascript
+import { forwardRef, useRef } from 'react';
+
+const FancyInput = forwardRef((props, ref) => (
+  <input ref={ref} className="fancy-input" {...props} />
+));
+
+function App() {
+  const inputRef = useRef(null);
+  
+  const handleClick = () => {
+    inputRef.current.focus();
+  };
+  
+  return (
+    <div>
+      <FancyInput ref={inputRef} placeholder="Enter text" />
+      <button onClick={handleClick}>Focus Input</button>
+    </div>
+  );
+}
+```
+
+<Warning>
+From `packages/react/src/ReactForwardRef.js:31`, the render function must accept exactly two parameters:
+
+```javascript
+if (render.length !== 0 && render.length !== 2) {
+  console.error(
+    'forwardRef render functions accept exactly two parameters: props and ref. %s',
+    render.length === 1
+      ? 'Did you forget to use the ref parameter?'
+      : 'Any additional parameter will be undefined.'
+  );
+}
+```
+
+Always use the signature `(props, ref) => { ... }`.
+</Warning>
+
+### Advanced ForwardRef with useImperativeHandle
+
+Customize the instance value that is exposed to parent components:
+
+```javascript
+import { forwardRef, useRef, useImperativeHandle } from 'react';
+
+const VideoPlayer = forwardRef((props, ref) => {
+  const videoRef = useRef(null);
+  
+  useImperativeHandle(ref, () => ({
+    play() {
+      videoRef.current.play();
+    },
+    pause() {
+      videoRef.current.pause();
+    },
+    seek(time) {
+      videoRef.current.currentTime = time;
+    },
+    getCurrentTime() {
+      return videoRef.current.currentTime;
+    }
+  }));
+  
+  return (
+    <video
+      ref={videoRef}
+      src={props.src}
+      width={props.width}
+      height={props.height}
+    />
+  );
+});
+
+function App() {
+  const playerRef = useRef(null);
+  
+  return (
+    <div>
+      <VideoPlayer
+        ref={playerRef}
+        src="video.mp4"
+        width={640}
+        height={360}
+      />
+      <button onClick={() => playerRef.current.play()}>Play</button>
+      <button onClick={() => playerRef.current.pause()}>Pause</button>
+      <button onClick={() => playerRef.current.seek(0)}>Restart</button>
+    </div>
+  );
+}
+```
+
+## Callback Refs
+
+Callback refs give you more control over when refs are set and unset:
+
+```javascript
+import { useState, useCallback } from 'react';
+
+function MeasureExample() {
+  const [height, setHeight] = useState(0);
+  
+  const measuredRef = useCallback(node => {
+    if (node !== null) {
+      setHeight(node.getBoundingClientRect().height);
+    }
+  }, []);
+  
+  return (
+    <div>
+      <h1 ref={measuredRef}>Hello, world</h1>
+      <h2>The above header is {Math.round(height)}px tall</h2>
+    </div>
+  );
+}
+```
+
+## Practical Use Cases
+
+### Managing Focus
+
+```javascript
+import { useRef, useEffect } from 'react';
+
+function AutoFocusInput({ shouldFocus }) {
+  const inputRef = useRef(null);
+  
+  useEffect(() => {
+    if (shouldFocus) {
+      inputRef.current.focus();
+    }
+  }, [shouldFocus]);
+  
+  return <input ref={inputRef} type="text" />;
+}
+```
+
+### Text Selection
+
+```javascript
+import { useRef } from 'react';
+
+function TextSelector() {
+  const textRef = useRef(null);
+  
+  const selectAllText = () => {
+    const node = textRef.current;
+    if (node) {
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
+  };
+  
+  return (
+    <div>
+      <p ref={textRef}>
+        This is some text that can be selected programmatically.
+      </p>
+      <button onClick={selectAllText}>Select Text</button>
+    </div>
+  );
+}
+```
+
+### Scroll Management
+
+```javascript
+import { useRef } from 'react';
+
+function ScrollableList({ items }) {
+  const listRef = useRef(null);
+  
+  const scrollToTop = () => {
+    listRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+  
+  const scrollToBottom = () => {
+    listRef.current.scrollTo({
+      top: listRef.current.scrollHeight,
+      behavior: 'smooth'
+    });
+  };
+  
+  return (
+    <div>
+      <div ref={listRef} style={{ height: 300, overflow: 'auto' }}>
+        {items.map(item => (
+          <div key={item.id}>{item.text}</div>
+        ))}
+      </div>
+      <button onClick={scrollToTop}>Top</button>
+      <button onClick={scrollToBottom}>Bottom</button>
+    </div>
+  );
+}
+```
+
+### Third-Party Library Integration
+
+```javascript
+import { useRef, useEffect } from 'react';
+import Chart from 'chart.js/auto';
+
+function ChartComponent({ data }) {
+  const canvasRef = useRef(null);
+  const chartRef = useRef(null);
+  
+  useEffect(() => {
+    const ctx = canvasRef.current.getContext('2d');
+    
+    // Destroy previous chart instance
+    if (chartRef.current) {
+      chartRef.current.destroy();
+    }
+    
+    // Create new chart
+    chartRef.current = new Chart(ctx, {
+      type: 'line',
+      data: data,
+      options: {
+        responsive: true,
+        maintainAspectRatio: false
+      }
+    });
+    
+    // Cleanup on unmount
+    return () => {
+      if (chartRef.current) {
+        chartRef.current.destroy();
+      }
+    };
+  }, [data]);
+  
+  return <canvas ref={canvasRef} />;
+}
+```
+
+## Refs with Mutable Values
+
+Refs can store any mutable value, not just DOM nodes:
+
+```javascript
+import { useRef, useState, useEffect } from 'react';
+
+function Timer() {
+  const [count, setCount] = useState(0);
+  const intervalRef = useRef(null);
+  
+  useEffect(() => {
+    intervalRef.current = setInterval(() => {
+      setCount(c => c + 1);
+    }, 1000);
+    
+    return () => {
+      clearInterval(intervalRef.current);
+    };
+  }, []);
+  
+  const handlePause = () => {
+    clearInterval(intervalRef.current);
+  };
+  
+  return (
+    <div>
+      <p>Count: {count}</p>
+      <button onClick={handlePause}>Pause</button>
+    </div>
+  );
+}
+```
+
+### Storing Previous Values
+
+```javascript
+import { useRef, useEffect } from 'react';
+
+function usePrevious(value) {
+  const ref = useRef();
+  
+  useEffect(() => {
+    ref.current = value;
+  });
+  
+  return ref.current;
+}
+
+function Counter({ count }) {
+  const prevCount = usePrevious(count);
+  
+  return (
+    <div>
+      <p>Current: {count}</p>
+      <p>Previous: {prevCount}</p>
+    </div>
+  );
+}
+```
+
+## ForwardRef Implementation Details
+
+From `packages/react/src/ReactForwardRef.js:51`:
+
+```javascript
+const elementType = {
+  $$typeof: REACT_FORWARD_REF_TYPE,
+  render,
+};
+```
+
+<Warning>
+From `packages/react/src/ReactForwardRef.js:19`, never wrap a memoized component with forwardRef:
+
+```javascript
+if (render != null && render.$$typeof === REACT_MEMO_TYPE) {
+  console.error(
+    'forwardRef requires a render function but received a `memo` ' +
+    'component. Instead of forwardRef(memo(...)), use ' +
+    'memo(forwardRef(...)).'
+  );
+}
+```
+
+Correct order: `memo(forwardRef(Component))`
+</Warning>
+
+## Best Practices
+
+1. **Avoid overusing refs**: Use props and state for data flow when possible
+
+2. **Don't access refs during render**: Refs are for side effects, not rendering logic
+
+3. **Use callback refs for dynamic elements**: When the ref target may change
+
+4. **Clean up side effects**: Always clean up intervals, listeners, etc. in useEffect cleanup
+
+5. **Type your refs**: Use TypeScript or JSDoc to specify ref types
+
+6. **Combine with useImperativeHandle**: Expose only necessary methods to parent components
+
+## When to Use Refs
+
+Refs are ideal for:
+- Managing focus, text selection, or media playback
+- Triggering imperative animations
+- Integrating with third-party DOM libraries
+- Storing mutable values that don't trigger re-renders
+
+Refs should not be used for:
+- Anything that can be done declaratively
+- Accessing child component state (use state lifting instead)
+- Replacing props or state
+
+## See Also
+
+- [Hooks](/api/hooks) - Learn about `useRef` and `useImperativeHandle`
+- [Component API](/api/component) - Component APIs and lifecycle

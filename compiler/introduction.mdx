@@ -1,0 +1,154 @@
+---
+title: Introduction to React Compiler
+description: Learn how React Compiler automatically optimizes your React applications for better performance
+---
+
+# Introduction to React Compiler
+
+React Compiler is a build-time optimization tool that automatically memoizes your React components and hooks, ensuring that only the minimal parts of your application re-render when state changes. The compiler also validates that your code follows the Rules of React.
+
+## What is React Compiler?
+
+React Compiler (formerly known as "React Forget") is a compiler that transforms React components and hooks to add automatic memoization. Unlike manual optimization with `React.memo()`, `useMemo()`, and `useCallback()`, React Compiler analyzes your code at build time and automatically determines what needs to be memoized.
+
+## Key Benefits
+
+### Automatic Memoization
+
+The compiler automatically memoizes:
+- Component render output
+- Hook values and callbacks
+- Derived computations
+- JSX elements
+
+No need to manually wrap everything in `useMemo` and `useCallback`.
+
+### Performance by Default
+
+React Compiler ensures:
+- **Bounded re-rendering**: Only the minimal parts of components re-render on updates
+- **Neutral startup time**: Code size increases are kept minimal to not impact initial load
+- **Predictable performance**: Apps are fast by default without manual optimization
+
+### Validation
+
+The compiler validates your code follows React's rules:
+- Pure render functions
+- Rules of Hooks (no conditional hook calls)
+- No setState during render
+- Proper effect dependencies
+
+## How It Works
+
+```javascript
+// Your code (before compilation)
+function MyComponent({ items }) {
+  const total = items.reduce((sum, item) => sum + item.price, 0);
+  const formatted = `Total: $${total}`;
+  return <div>{formatted}</div>;
+}
+```
+
+```javascript
+// Compiled output (after React Compiler)
+import { c as _c } from "react/compiler-runtime";
+
+function MyComponent({ items }) {
+  const $ = _c(3);
+  let t0;
+  if ($[0] !== items) {
+    t0 = items.reduce((sum, item) => sum + item.price, 0);
+    $[0] = items;
+    $[1] = t0;
+  } else {
+    t0 = $[1];
+  }
+  const total = t0;
+  let t1;
+  if ($[2] !== total) {
+    t1 = `Total: $${total}`;
+    $[2] = total;
+    $[3] = t1;
+  } else {
+    t1 = $[3];
+  }
+  const formatted = t1;
+  return <div>{formatted}</div>;
+}
+```
+
+The compiler:
+1. Analyzes data flow and dependencies
+2. Groups related computations into "reactive scopes"
+3. Generates memoization cache slots (`$` array)
+4. Inserts cache checks and updates
+
+## Design Goals
+
+React Compiler follows these principles:
+
+### Works on Idiomatic React
+
+- No type annotations required
+- No explicit directives or pragmas (in most cases)
+- Just write normal React code following the Rules of React
+
+### Retains React's Programming Model
+
+- Component-based architecture
+- Declarative programming
+- **Removes** concepts (manual memoization) rather than adding new ones
+
+### High-Level Output
+
+- Compiled code is readable and debuggable
+- Retains original constructs (loops, conditionals, etc.)
+- Works with existing debugging tools
+
+### Predictable and Understandable
+
+- Developers can build intuition for how it works
+- Clear error messages
+- Supports typical profiling workflows
+
+## When to Use React Compiler
+
+### Good Use Cases
+
+- Production applications following Rules of React
+- Components with complex derived state
+- Apps with performance concerns
+- Codebases heavy with manual `useMemo`/`useCallback`
+
+### Not Recommended For
+
+- Class components (not supported)
+- Code violating Rules of React
+- Rare JavaScript features (`eval`, with statements, etc.)
+- Legacy codebases with extensive rule violations
+
+## What's Next?
+
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/compiler/installation">
+    Install and configure React Compiler
+  </Card>
+  <Card title="How It Works" icon="gear" href="/compiler/how-it-works">
+    Deep dive into compiler architecture
+  </Card>
+  <Card title="Configuration" icon="sliders" href="/compiler/configuration">
+    Configure compiler options
+  </Card>
+  <Card title="Babel Plugin" icon="plug" href="/compiler/babel-plugin">
+    Integrate with your build tools
+  </Card>
+</CardGroup>
+
+## Version Information
+
+React Compiler is currently in experimental release:
+
+- **Package**: `babel-plugin-react-compiler`
+- **Version**: `0.0.0-experimental-*`
+- **Status**: Experimental (API may change)
+- **React Version**: Requires React 19 or experimental builds

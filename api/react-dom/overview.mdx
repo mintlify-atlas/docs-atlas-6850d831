@@ -1,0 +1,284 @@
+---
+title: ReactDOM Overview
+description: Complete guide to ReactDOM APIs for client and server rendering
+---
+
+# ReactDOM Overview
+
+ReactDOM is the entry point for React applications in web browsers. It provides methods for rendering React components to the DOM, managing root instances, and server-side rendering.
+
+## Package Structure
+
+ReactDOM is split into several entry points based on usage:
+
+### Client APIs
+
+```javascript
+import { createRoot, hydrateRoot } from 'react-dom/client';
+```
+
+**Modern client rendering APIs** (React 18+):
+- `createRoot()` - Create a root for client-side rendering
+- `hydrateRoot()` - Hydrate server-rendered content
+
+### Shared APIs
+
+```javascript
+import { flushSync, createPortal } from 'react-dom';
+```
+
+**APIs available in both client and server contexts:**
+- `flushSync()` - Force synchronous updates
+- `createPortal()` - Render children into a different DOM node
+- `prefetchDNS()`, `preconnect()`, `preload()`, `preloadModule()` - Resource preloading
+- `preinit()`, `preinitModule()` - Resource initialization
+- `useFormState()`, `useFormStatus()` - Form handling hooks
+- `requestFormReset()` - Programmatically reset forms
+
+### Server APIs
+
+```javascript
+import { renderToString, renderToStaticMarkup } from 'react-dom/server';
+import { renderToPipeableStream } from 'react-dom/server';
+```
+
+**Server-side rendering APIs:**
+- `renderToString()` - Legacy synchronous server rendering
+- `renderToStaticMarkup()` - Render to static HTML without React attributes
+- `renderToPipeableStream()` - Modern streaming server rendering (Node.js)
+- `renderToReadableStream()` - Modern streaming server rendering (Web Streams)
+
+## Client vs Server Rendering
+
+### Client-Side Rendering (CSR)
+
+Render React components directly in the browser:
+
+```javascript
+import { createRoot } from 'react-dom/client';
+
+const root = createRoot(document.getElementById('root'));
+root.render(<App />);
+```
+
+**Pros:**
+- Simple setup
+- Dynamic interactivity from the start
+- No server required after initial load
+
+**Cons:**
+- Slower initial page load
+- Poor SEO without additional tooling
+- Blank page while JavaScript loads
+
+### Server-Side Rendering (SSR)
+
+Render React components to HTML on the server, then hydrate on the client:
+
+**Server:**
+```javascript
+import { renderToPipeableStream } from 'react-dom/server';
+
+const { pipe } = renderToPipeableStream(<App />, {
+  onShellReady() {
+    response.setHeader('content-type', 'text/html');
+    pipe(response);
+  }
+});
+```
+
+**Client:**
+```javascript
+import { hydrateRoot } from 'react-dom/client';
+
+hydrateRoot(document.getElementById('root'), <App />);
+```
+
+**Pros:**
+- Faster perceived load time
+- Better SEO
+- Content visible before JavaScript loads
+
+**Cons:**
+- More complex setup
+- Requires server infrastructure
+- Hydration mismatches can cause issues
+
+### Static Site Generation (SSG)
+
+Pre-render pages at build time:
+
+```javascript
+import { renderToStaticMarkup } from 'react-dom/server';
+
+const html = renderToStaticMarkup(<App />);
+// Write to file system
+```
+
+**Pros:**
+- Fastest possible load times
+- Can be served from CDN
+- No server required
+
+**Cons:**
+- Must rebuild for content changes
+- Not suitable for dynamic content
+- No React interactivity (unless you hydrate)
+
+## Rendering Modes
+
+### Concurrent Mode (Default)
+
+React 18+ uses concurrent rendering by default with `createRoot()`:
+
+```javascript
+const root = createRoot(container);
+root.render(<App />);
+```
+
+**Features:**
+- Interruptible rendering
+- Automatic batching
+- Transitions
+- Suspense for data fetching
+
+### Legacy Mode (React 17 and earlier)
+
+<Warning>
+Legacy mode is deprecated. Migrate to `createRoot()` for new applications.
+</Warning>
+
+```javascript
+// React 17 and earlier
+import ReactDOM from 'react-dom';
+ReactDOM.render(<App />, container);
+```
+
+## Version Information
+
+All ReactDOM packages export a `version` string:
+
+```javascript
+import { version } from 'react-dom';
+import { version as clientVersion } from 'react-dom/client';
+import { version as serverVersion } from 'react-dom/server';
+
+console.log(version); // "19.3.0"
+```
+
+## Browser Compatibility
+
+ReactDOM requires the following browser features:
+
+- **ES6 Features**: Map, Set, Promise
+- **Modern DOM APIs**: Element, Document, DocumentFragment
+- **Event System**: addEventListener, removeEventListener
+
+### Polyfills
+
+For older browsers, include polyfills before React:
+
+```html
+<script src="https://unpkg.com/core-js-bundle@3/minified.js"></script>
+<script src="your-react-app.js"></script>
+```
+
+## Environment Detection
+
+ReactDOM automatically detects the environment:
+
+- **Browser**: Full client-side features
+- **Node.js**: Server rendering capabilities
+- **Web Workers**: Limited functionality
+- **Edge Runtime**: Optimized for edge computing
+
+## API Reference
+
+Explore detailed documentation for each API:
+
+<CardGroup cols={2}>
+  <Card title="createRoot" icon="plus" href="/api/react-dom/create-root">
+    Create a root for rendering React components
+  </Card>
+  
+  <Card title="hydrateRoot" icon="droplet" href="/api/react-dom/hydrate-root">
+    Hydrate server-rendered HTML with React
+  </Card>
+  
+  <Card title="renderToString" icon="file-code" href="/api/react-dom/render-to-string">
+    Legacy server rendering to string
+  </Card>
+  
+  <Card title="renderToStaticMarkup" icon="file" href="/api/react-dom/render-to-static-markup">
+    Render to static HTML without React
+  </Card>
+  
+  <Card title="findDOMNode" icon="magnifying-glass" href="/api/react-dom/find-dom-node">
+    Find DOM node (deprecated)
+  </Card>
+  
+  <Card title="flushSync" icon="bolt" href="/api/react-dom/flush-sync">
+    Force synchronous updates
+  </Card>
+</CardGroup>
+
+## Migration Guide
+
+### From React 17 to React 18+
+
+**Before (React 17):**
+```javascript
+import ReactDOM from 'react-dom';
+
+ReactDOM.render(<App />, container);
+ReactDOM.unmountComponentAtNode(container);
+ReactDOM.hydrate(<App />, container);
+```
+
+**After (React 18+):**
+```javascript
+import { createRoot, hydrateRoot } from 'react-dom/client';
+
+// Client rendering
+const root = createRoot(container);
+root.render(<App />);
+root.unmount();
+
+// Hydration
+hydrateRoot(container, <App />);
+```
+
+### Server Rendering Migration
+
+**Before:**
+```javascript
+import { renderToString } from 'react-dom/server';
+
+const html = renderToString(<App />);
+```
+
+**After:**
+```javascript
+import { renderToPipeableStream } from 'react-dom/server';
+
+const { pipe } = renderToPipeableStream(<App />, {
+  onShellReady() {
+    pipe(response);
+  }
+});
+```
+
+## Best Practices
+
+1. **Use createRoot for new apps** - Enables concurrent features
+2. **Prefer streaming SSR** - Better performance than renderToString
+3. **Handle hydration errors** - Use onRecoverableError callback
+4. **Avoid findDOMNode** - Use refs instead
+5. **Minimize flushSync usage** - Hurts performance
+6. **Clean up on unmount** - Call root.unmount() when done
+
+## Related Resources
+
+- [React Documentation](https://react.dev)
+- [React 18 Upgrade Guide](https://react.dev/blog/2022/03/08/react-18-upgrade-guide)
+- [Server Components](https://react.dev/reference/rsc/server-components)

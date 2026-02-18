@@ -1,0 +1,520 @@
+---
+title: Suspense
+description: Declaratively specify loading states for asynchronous operations using React Suspense.
+---
+
+## Overview
+
+Suspense is a React component that lets you specify a loading state while waiting for some asynchronous operation to complete. It works with lazy-loaded components, data fetching, and other async operations.
+
+## Basic Usage
+
+```javascript
+import { Suspense, lazy } from 'react';
+
+const LazyComponent = lazy(() => import('./LazyComponent'));
+
+function App() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <LazyComponent />
+    </Suspense>
+  );
+}
+```
+
+## Suspense API
+
+From `packages/react/src/ReactClient.js:105`:
+
+```javascript
+import { REACT_SUSPENSE_TYPE as Suspense } from 'react';
+
+<Suspense fallback={<LoadingSpinner />}>
+  {children}
+</Suspense>
+```
+
+### Props
+
+- **fallback**: The content to display while children are loading (required)
+- **children**: The components that may suspend
+
+## With Code Splitting
+
+```javascript
+import { Suspense, lazy } from 'react';
+
+const Home = lazy(() => import('./routes/Home'));
+const Profile = lazy(() => import('./routes/Profile'));
+const Settings = lazy(() => import('./routes/Settings'));
+
+function App() {
+  return (
+    <Suspense fallback={<PageLoader />}>
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/profile" element={<Profile />} />
+        <Route path="/settings" element={<Settings />} />
+      </Routes>
+    </Suspense>
+  );
+}
+
+function PageLoader() {
+  return (
+    <div className="page-loader">
+      <div className="spinner" />
+      <p>Loading page...</p>
+    </div>
+  );
+}
+```
+
+## Nested Suspense Boundaries
+
+Use multiple Suspense boundaries for granular loading states:
+
+```javascript
+import { Suspense, lazy } from 'react';
+
+const Header = lazy(() => import('./Header'));
+const Sidebar = lazy(() => import('./Sidebar'));
+const Content = lazy(() => import('./Content'));
+
+function App() {
+  return (
+    <div>
+      {/* Header loads independently */}
+      <Suspense fallback={<div>Loading header...</div>}>
+        <Header />
+      </Suspense>
+      
+      <div className="main-layout">
+        {/* Sidebar and content load independently */}
+        <Suspense fallback={<div>Loading sidebar...</div>}>
+          <Sidebar />
+        </Suspense>
+        
+        <Suspense fallback={<div>Loading content...</div>}>
+          <Content />
+        </Suspense>
+      </div>
+    </div>
+  );
+}
+```
+
+## Data Fetching with Suspense
+
+<Warning>
+Suspense for data fetching is still experimental. Use frameworks like Next.js, Remix, or libraries that support Suspense-enabled data fetching.
+</Warning>
+
+```javascript
+import { Suspense } from 'react';
+
+function ProfilePage({ userId }) {
+  return (
+    <Suspense fallback={<ProfileSkeleton />}>
+      <ProfileDetails userId={userId} />
+      <Suspense fallback={<div>Loading posts...</div>}>
+        <ProfilePosts userId={userId} />
+      </Suspense>
+    </Suspense>
+  );
+}
+
+function ProfileDetails({ userId }) {
+  // This would suspend until data is ready
+  const user = use(fetchUser(userId));
+  
+  return (
+    <div>
+      <h1>{user.name}</h1>
+      <p>{user.bio}</p>
+    </div>
+  );
+}
+
+function ProfilePosts({ userId }) {
+  const posts = use(fetchPosts(userId));
+  
+  return (
+    <div>
+      {posts.map(post => (
+        <Post key={post.id} post={post} />
+      ))}
+    </div>
+  );
+}
+```
+
+## SuspenseList (Experimental)
+
+From `packages/react/src/ReactClient.js:116`:
+
+```javascript
+import { unstable_SuspenseList as SuspenseList } from 'react';
+```
+
+Coordinate the loading order of multiple Suspense boundaries:
+
+```javascript
+import { Suspense } from 'react';
+import { unstable_SuspenseList as SuspenseList } from 'react';
+
+function Feed() {
+  return (
+    <SuspenseList revealOrder="forwards" tail="collapsed">
+      <Suspense fallback={<PostSkeleton />}>
+        <Post id={1} />
+      </Suspense>
+      <Suspense fallback={<PostSkeleton />}>
+        <Post id={2} />
+      </Suspense>
+      <Suspense fallback={<PostSkeleton />}>
+        <Post id={3} />
+      </Suspense>
+    </SuspenseList>
+  );
+}
+```
+
+### SuspenseList Props
+
+- **revealOrder**: `"forwards"` | `"backwards"` | `"together"` - Controls display order
+- **tail**: `"collapsed"` | `"hidden"` - Controls fallback display
+
+## Loading States Best Practices
+
+### Skeleton Screens
+
+```javascript
+import { Suspense } from 'react';
+
+function UserProfile({ userId }) {
+  return (
+    <Suspense fallback={<ProfileSkeleton />}>
+      <Profile userId={userId} />
+    </Suspense>
+  );
+}
+
+function ProfileSkeleton() {
+  return (
+    <div className="profile-skeleton">
+      <div className="skeleton-avatar" />
+      <div className="skeleton-name" />
+      <div className="skeleton-bio" />
+      <div className="skeleton-stats">
+        <div className="skeleton-stat" />
+        <div className="skeleton-stat" />
+        <div className="skeleton-stat" />
+      </div>
+    </div>
+  );
+}
+```
+
+### Progressive Enhancement
+
+```javascript
+import { Suspense } from 'react';
+
+function Dashboard() {
+  return (
+    <div>
+      {/* Critical content loads first */}
+      <Header />
+      
+      {/* Main content with loading state */}
+      <Suspense fallback={<ContentSkeleton />}>
+        <MainContent />
+      </Suspense>
+      
+      {/* Secondary content loads independently */}
+      <aside>
+        <Suspense fallback={<SidebarSkeleton />}>
+          <Sidebar />
+        </Suspense>
+      </aside>
+    </div>
+  );
+}
+```
+
+## Error Handling with Suspense
+
+Combine Suspense with Error Boundaries:
+
+```javascript
+import { Suspense, Component } from 'react';
+
+class ErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  
+  static getDerivedStateFromError(error) {
+    return { hasError: true };
+  }
+  
+  render() {
+    if (this.state.hasError) {
+      return <div>Something went wrong</div>;
+    }
+    return this.props.children;
+  }
+}
+
+function App() {
+  return (
+    <ErrorBoundary>
+      <Suspense fallback={<div>Loading...</div>}>
+        <LazyComponent />
+      </Suspense>
+    </ErrorBoundary>
+  );
+}
+```
+
+## Suspense with Transitions
+
+Combine Suspense with transitions to avoid hiding existing content:
+
+```javascript
+import { Suspense, useState, useTransition } from 'react';
+
+function App() {
+  const [tab, setTab] = useState('home');
+  const [isPending, startTransition] = useTransition();
+  
+  const handleTabChange = (newTab) => {
+    startTransition(() => {
+      setTab(newTab);
+    });
+  };
+  
+  return (
+    <div>
+      <nav>
+        <button
+          onClick={() => handleTabChange('home')}
+          style={{ opacity: isPending ? 0.7 : 1 }}
+        >
+          Home
+        </button>
+        <button
+          onClick={() => handleTabChange('profile')}
+          style={{ opacity: isPending ? 0.7 : 1 }}
+        >
+          Profile
+        </button>
+      </nav>
+      
+      <Suspense fallback={<TabSkeleton />}>
+        {tab === 'home' && <HomeTab />}
+        {tab === 'profile' && <ProfileTab />}
+      </Suspense>
+    </div>
+  );
+}
+```
+
+## Practical Examples
+
+### Image Lazy Loading
+
+```javascript
+import { Suspense } from 'react';
+
+function Gallery({ images }) {
+  return (
+    <div className="gallery">
+      {images.map(image => (
+        <Suspense key={image.id} fallback={<ImagePlaceholder />}>
+          <LazyImage src={image.url} alt={image.alt} />
+        </Suspense>
+      ))}
+    </div>
+  );
+}
+
+function ImagePlaceholder() {
+  return (
+    <div className="image-placeholder">
+      <div className="shimmer" />
+    </div>
+  );
+}
+```
+
+### Tabbed Content
+
+```javascript
+import { Suspense, lazy, useState } from 'react';
+
+const OverviewTab = lazy(() => import('./tabs/Overview'));
+const AnalyticsTab = lazy(() => import('./tabs/Analytics'));
+const SettingsTab = lazy(() => import('./tabs/Settings'));
+
+function Dashboard() {
+  const [activeTab, setActiveTab] = useState('overview');
+  
+  return (
+    <div>
+      <nav>
+        <button onClick={() => setActiveTab('overview')}>Overview</button>
+        <button onClick={() => setActiveTab('analytics')}>Analytics</button>
+        <button onClick={() => setActiveTab('settings')}>Settings</button>
+      </nav>
+      
+      <Suspense fallback={<TabSkeleton />}>
+        {activeTab === 'overview' && <OverviewTab />}
+        {activeTab === 'analytics' && <AnalyticsTab />}
+        {activeTab === 'settings' && <SettingsTab />}
+      </Suspense>
+    </div>
+  );
+}
+```
+
+### Modal with Lazy Content
+
+```javascript
+import { Suspense, lazy, useState } from 'react';
+import { createPortal } from 'react-dom';
+
+const HeavyModalContent = lazy(() => import('./HeavyModalContent'));
+
+function App() {
+  const [showModal, setShowModal] = useState(false);
+  
+  return (
+    <div>
+      <button onClick={() => setShowModal(true)}>Open Modal</button>
+      
+      {showModal && createPortal(
+        <div className="modal-backdrop" onClick={() => setShowModal(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <Suspense fallback={<ModalSkeleton />}>
+              <HeavyModalContent />
+            </Suspense>
+          </div>
+        </div>,
+        document.body
+      )}
+    </div>
+  );
+}
+```
+
+## Timeout and Retry
+
+```javascript
+import { Suspense, useState } from 'react';
+
+function SuspenseWithTimeout({ timeout = 5000, fallback, children }) {
+  const [isTimeout, setIsTimeout] = useState(false);
+  
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsTimeout(true);
+    }, timeout);
+    
+    return () => clearTimeout(timer);
+  }, [timeout]);
+  
+  if (isTimeout) {
+    return (
+      <div>
+        <p>Loading is taking longer than expected...</p>
+        <button onClick={() => window.location.reload()}>
+          Retry
+        </button>
+      </div>
+    );
+  }
+  
+  return (
+    <Suspense fallback={fallback}>
+      {children}
+    </Suspense>
+  );
+}
+```
+
+## Suspense Internal Behavior
+
+Suspense works by catching thrown promises:
+
+```javascript
+// This is what happens internally (simplified)
+function ComponentThatSuspends() {
+  const data = fetchData();
+  // If data is not ready, fetchData() throws a promise
+  // Suspense catches this promise and shows fallback
+  // When promise resolves, React retries rendering
+  return <div>{data}</div>;
+}
+```
+
+<Warning>
+Never manually throw promises for Suspense. Use libraries that properly integrate with Suspense or wait for official data fetching Suspense support.
+</Warning>
+
+## Best Practices
+
+1. **Use meaningful fallbacks**: Show skeleton screens instead of spinners when possible
+
+2. **Multiple boundaries**: Use multiple Suspense boundaries for better UX
+
+3. **Combine with error boundaries**: Always handle errors alongside loading states
+
+4. **Progressive enhancement**: Load critical content first
+
+5. **Test loading states**: Explicitly test that loading states appear correctly
+
+6. **Avoid waterfalls**: Structure data dependencies to prevent loading waterfalls
+
+7. **Use transitions**: Combine with useTransition for better perceived performance
+
+## Common Patterns
+
+### Waterfall Prevention
+
+```javascript
+// Bad: Sequential loading (waterfall)
+function Profile() {
+  return (
+    <Suspense fallback={<div>Loading profile...</div>}>
+      <UserInfo />
+      <Suspense fallback={<div>Loading posts...</div>}>
+        <UserPosts />
+      </Suspense>
+    </Suspense>
+  );
+}
+
+// Good: Parallel loading
+function Profile() {
+  return (
+    <>
+      <Suspense fallback={<div>Loading profile...</div>}>
+        <UserInfo />
+      </Suspense>
+      <Suspense fallback={<div>Loading posts...</div>}>
+        <UserPosts />
+      </Suspense>
+    </>
+  );
+}
+```
+
+## See Also
+
+- [Code Splitting](/advanced/code-splitting) - Lazy loading components
+- [Concurrent Features](/advanced/concurrent-features) - Transitions and deferred values
+- [Error Boundaries](/advanced/error-boundaries) - Handling errors

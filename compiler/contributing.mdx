@@ -1,0 +1,574 @@
+---
+title: Contributing
+description: How to contribute to React Compiler development
+---
+
+# Contributing to React Compiler
+
+Thank you for your interest in contributing to React Compiler! This guide will help you set up your development environment and understand the contribution workflow.
+
+## Getting Started
+
+### Prerequisites
+
+- **Node.js**: Version 18 or higher
+- **Yarn**: Package manager (v1 or v3+)
+- **Git**: For version control
+- **Editor**: VS Code recommended (with TypeScript support)
+
+### Clone the Repository
+
+```bash
+git clone https://github.com/facebook/react.git
+cd react/compiler
+```
+
+### Install Dependencies
+
+```bash
+yarn install
+```
+
+### Build the Compiler
+
+```bash
+# Build all packages
+yarn build
+
+# Build and watch for changes
+yarn watch
+```
+
+## Development Workflow
+
+### Running Tests
+
+React Compiler uses a custom test runner called `snap`:
+
+```bash
+# Run all tests
+yarn snap
+
+# Run tests in watch mode
+yarn snap --watch
+
+# Run specific test pattern
+yarn snap -p "pattern"
+
+# Run with debug output
+yarn snap -p "fixture-name" -d
+
+# Update test snapshots
+yarn snap -u
+```
+
+### Test Fixtures
+
+Test fixtures are located in:
+```
+packages/babel-plugin-react-compiler/src/__tests__/fixtures/compiler/
+```
+
+**Fixture types:**
+
+- `feature-name.js` - Normal test case
+- `feature-name.expect.md` - Expected output
+- `error.todo-*.js` - Known limitation (graceful bailout)
+- `error.bug-*.js` - Known bug
+
+**Fixture format:**
+
+```javascript
+// @enableFeatureFlag:true
+// Comment describing the test case
+function Component(props) {
+  // Test code
+}
+```
+
+### Adding a New Test
+
+1. **Create fixture file:**
+
+```bash
+touch packages/babel-plugin-react-compiler/src/__tests__/fixtures/compiler/my-feature.js
+```
+
+2. **Write test code:**
+
+```javascript my-feature.js
+// Tests that my feature works correctly
+function MyComponent({ value }) {
+  const result = myFeature(value);
+  return <div>{result}</div>;
+}
+```
+
+3. **Generate expected output:**
+
+```bash
+yarn snap -p my-feature -u
+```
+
+4. **Verify output:**
+
+```bash
+cat packages/babel-plugin-react-compiler/src/__tests__/fixtures/compiler/my-feature.expect.md
+```
+
+### Compiling Arbitrary Files
+
+Test the compiler on any file:
+
+```bash
+# Compile and see output
+yarn snap compile path/to/file.js
+
+# Compile with debug output (shows all passes)
+yarn snap compile --debug path/to/file.js
+```
+
+### Minimizing Test Cases
+
+Reduce a failing test to minimal reproduction:
+
+```bash
+# Minimize a file
+yarn snap minimize path/to/file.js
+
+# Minimize and update in-place
+yarn snap minimize --update path/to/file.js
+```
+
+## Code Structure
+
+### Key Directories
+
+```
+compiler/
+├── packages/
+│   ├── babel-plugin-react-compiler/     # Main compiler
+│   │   ├── src/
+│   │   │   ├── Babel/                     # Babel integration
+│   │   │   ├── Entrypoint/                # Pipeline orchestration
+│   │   │   ├── HIR/                       # HIR data structures
+│   │   │   ├── SSA/                       # SSA passes
+│   │   │   ├── TypeInference/             # Type system
+│   │   │   ├── Inference/                 # Effect inference
+│   │   │   ├── ReactiveScopes/            # Scope construction
+│   │   │   ├── Optimization/              # Optimizations
+│   │   │   ├── Validation/                # Validation passes
+│   │   │   └── __tests__/                 # Test fixtures
+│   │   └── docs/passes/               # Pass documentation
+│   ├── eslint-plugin-react-compiler/  # ESLint plugin
+│   ├── react-compiler-runtime/        # Runtime helpers
+│   └── snap/                          # Test runner
+├── docs/                              # Documentation
+└── scripts/                           # Build scripts
+```
+
+### Important Files
+
+- `src/Entrypoint/Pipeline.ts` - Main compilation pipeline
+- `src/HIR/HIR.ts` - HIR type definitions
+- `src/HIR/Environment.ts` - Configuration schema
+- `src/CompilerError.ts` - Error handling
+
+## Making Changes
+
+### Modifying a Pass
+
+Before modifying a pass, **read its documentation**:
+
+```
+packages/babel-plugin-react-compiler/docs/passes/
+```
+
+Each pass has detailed documentation explaining:
+- Purpose and invariants
+- Input/output guarantees
+- Algorithm description
+- Edge cases
+
+**Example workflow:**
+
+1. **Find the pass:**
+
+```bash
+# List all pass docs
+ls packages/babel-plugin-react-compiler/docs/passes/
+```
+
+2. **Read the documentation:**
+
+```bash
+cat packages/babel-plugin-react-compiler/docs/passes/08-inferMutationAliasingEffects.md
+```
+
+3. **Locate the implementation:**
+
+```
+src/Inference/InferMutationAliasingEffects.ts
+```
+
+4. **Make your changes**
+
+5. **Add test cases**
+
+6. **Run tests:**
+
+```bash
+yarn snap
+```
+
+### Adding a New Pass
+
+1. **Create the pass file:**
+
+```typescript src/MyCategory/MyNewPass.ts
+import { HIRFunction } from '../HIR';
+
+export function myNewPass(fn: HIRFunction): void {
+  // Implementation
+}
+```
+
+2. **Add to pipeline:**
+
+```typescript src/Entrypoint/Pipeline.ts
+import { myNewPass } from '../MyCategory/MyNewPass';
+
+// In runWithEnvironment function:
+myNewPass(hir);
+log({kind: 'hir', name: 'MyNewPass', value: hir});
+```
+
+3. **Add documentation:**
+
+```bash
+touch packages/babel-plugin-react-compiler/docs/passes/XX-myNewPass.md
+```
+
+4. **Write tests:**
+
+```bash
+touch src/__tests__/fixtures/compiler/my-new-pass-basic.js
+```
+
+### Adding Configuration Options
+
+1. **Update schema:**
+
+```typescript src/HIR/Environment.ts
+export const EnvironmentConfigSchema = z.object({
+  // ... existing options
+  
+  myNewOption: z.boolean().default(false),
+});
+```
+
+2. **Use in code:**
+
+```typescript
+if (env.config.myNewOption) {
+  // Apply optimization
+}
+```
+
+3. **Document in configuration.mdx**
+
+## Error Handling
+
+### Error Types
+
+```typescript
+import { CompilerError } from '../CompilerError';
+
+// Graceful bailout for unsupported feature
+CompilerError.throwTodo({
+  reason: 'Support [feature description]',
+  loc: node.loc,
+});
+
+// Hard error for invalid state
+CompilerError.invariant(condition, {
+  reason: 'Expected [condition]',
+  loc: node.loc,
+});
+
+// Validation error for rule violation
+return Err(
+  new CompilerError({
+    kind: 'InvalidReact',
+    reason: 'Component violates Rules of React',
+    loc: node.loc,
+  })
+);
+```
+
+### When to Use Each
+
+- **`throwTodo`**: Known limitation, expected pattern that's not yet supported
+- **`invariant`**: Unexpected state indicating a compiler bug
+- **`InvalidReact`**: User code violates React's rules
+- **`InvalidJS`**: Syntactically invalid JavaScript
+
+## Debugging
+
+### Debug Output
+
+Run tests with debug logging:
+
+```bash
+yarn snap -p my-test -d
+```
+
+This shows HIR after each pass.
+
+### Custom Logger
+
+Create a debug logger:
+
+```typescript
+const logger = {
+  debugLogIRs(value) {
+    console.log(`[${value.kind}] ${value.name}`);
+    if (value.kind === 'hir') {
+      console.log(prettyPrint(value.value));
+    }
+  },
+};
+```
+
+### Breakpoints
+
+Set breakpoints in VS Code:
+
+1. Open file in editor
+2. Click left of line number to add breakpoint
+3. Run test in debug mode: `F5`
+
+### Print HIR
+
+Use pretty printer:
+
+```typescript
+import { printHIR } from '../HIR/PrintHIR';
+
+console.log(printHIR(hir));
+```
+
+## Submitting Changes
+
+### Commit Guidelines
+
+React Compiler uses Sapling (similar to Mercurial):
+
+```bash
+# Check status
+sl status
+
+# Add new/removed files
+sl addremove
+
+# Commit changes
+sl commit -m "Brief description
+
+Detailed explanation of changes.
+
+Test plan: How you tested the changes."
+```
+
+### Commit Message Format
+
+```
+[compiler] Brief description (50 chars)
+
+Detailed explanation of:
+- What changed
+- Why it changed
+- How it works
+
+Test plan:
+- Added test fixtures
+- Ran yarn snap
+- Tested on real-world code
+```
+
+### Opening a Pull Request
+
+1. **Push your changes:**
+
+```bash
+sl push
+```
+
+2. **Create PR on GitHub:**
+
+- Base: `facebook/react:main`
+- Title: Brief description
+- Description: Detailed explanation + test plan
+
+3. **Address review feedback**
+
+4. **Wait for CI to pass**
+
+### PR Checklist
+
+- [ ] Tests added for new functionality
+- [ ] All tests passing (`yarn snap`)
+- [ ] Pass documentation updated (if modifying pass)
+- [ ] Configuration documented (if adding options)
+- [ ] Examples added to fixtures
+- [ ] Commit message follows format
+- [ ] No unrelated changes
+
+## Code Style
+
+### TypeScript
+
+- Use explicit types for public APIs
+- Prefer `interface` over `type` for objects
+- Use `const` over `let` when possible
+- Avoid `any` - use `unknown` instead
+
+### Naming Conventions
+
+- **Files**: PascalCase for classes, camelCase for utilities
+- **Variables**: camelCase
+- **Types**: PascalCase
+- **Constants**: UPPER_SNAKE_CASE
+- **Private fields**: `#privateField` (private class fields)
+
+### Formatting
+
+Code is automatically formatted. Run:
+
+```bash
+yarn lint --fix
+```
+
+## Getting Help
+
+### Resources
+
+- **Documentation**: Read `docs/` and `docs/passes/`
+- **CLAUDE.md**: Compiler knowledge base
+- **GitHub Issues**: Search existing issues
+- **Discord**: React Compiler channel
+
+### Asking Questions
+
+When asking for help, provide:
+
+1. **What you're trying to do**
+2. **What you've tried**
+3. **Minimal reproduction** (test fixture)
+4. **Expected vs actual behavior**
+5. **Error messages** (full output)
+
+## Common Tasks
+
+### Update Expected Output
+
+```bash
+yarn snap -u
+```
+
+### Run Specific Category
+
+```bash
+yarn snap -p "error.*"
+```
+
+### Check Type Errors
+
+```bash
+yarn tsc --noEmit
+```
+
+### Run Linter
+
+```bash
+yarn lint
+```
+
+### Build for Production
+
+```bash
+yarn build
+```
+
+## Advanced Topics
+
+### Custom Test Runner
+
+The `snap` runner is in `packages/snap/`. It:
+
+- Discovers fixtures
+- Compiles code
+- Generates expected output
+- Executes code in both versions
+- Compares results
+
+### Compiler Profiling
+
+Enable timing:
+
+```bash
+ENABLE_REACT_COMPILER_TIMINGS=1 yarn snap
+```
+
+### Memory Profiling
+
+Use Node inspector:
+
+```bash
+node --inspect-brk $(yarn bin)/snap
+```
+
+Open Chrome DevTools and profile.
+
+## Best Practices
+
+### Writing Tests
+
+1. **One concept per fixture** - Each test should validate one behavior
+2. **Descriptive names** - Name clearly indicates what's tested
+3. **Comments** - Explain why behavior is expected
+4. **Edge cases** - Test boundary conditions
+
+### Code Quality
+
+1. **Keep passes focused** - Each pass should do one thing well
+2. **Document invariants** - State assumptions clearly
+3. **Error messages** - Make them actionable
+4. **Performance** - Avoid O(n²) algorithms when possible
+
+### Review Process
+
+1. **Self-review** - Review your own changes first
+2. **Test thoroughly** - Run on real-world code
+3. **Explain changes** - Help reviewers understand
+4. **Respond promptly** - Address feedback quickly
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Architecture" icon="diagram-project" href="/compiler/architecture">
+    Understand the compiler pipeline
+  </Card>
+  <Card title="HIR" icon="sitemap" href="/compiler/hir">
+    Learn the intermediate representation
+  </Card>
+  <Card title="Optimization Passes" icon="wand-magic-sparkles" href="/compiler/optimization-passes">
+    Study specific passes
+  </Card>
+  <Card title="Configuration" icon="sliders" href="/compiler/configuration">
+    Configuration options reference
+  </Card>
+</CardGroup>
+
+## License
+
+By contributing to React Compiler, you agree that your contributions will be licensed under the MIT license.

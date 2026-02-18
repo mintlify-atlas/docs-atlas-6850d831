@@ -1,0 +1,588 @@
+---
+title: Configuration
+description: Configure React Compiler options and feature flags
+---
+
+# Configuration
+
+React Compiler provides extensive configuration options to customize its behavior for your project.
+
+## Basic Configuration
+
+```javascript babel.config.js
+module.exports = {
+  plugins: [
+    ['babel-plugin-react-compiler', {
+      // Configuration options here
+    }],
+  ],
+};
+```
+
+## Memoization Options
+
+### enablePreserveExistingMemoizationGuarantees
+
+**Type:** `boolean`  
+**Default:** `true`
+
+Preserves guarantees about when values are memoized from existing `useMemo`/`useCallback` calls.
+
+```javascript
+{
+  enablePreserveExistingMemoizationGuarantees: true
+}
+```
+
+**When `true`:**
+- Compiler uses `useMemo`/`useCallback` boundaries to understand mutation points
+- Guarantees existing referential equality behavior is preserved
+- Preserves effect execution patterns that depend on referential equality
+
+**When `false`:**
+- Compiler ignores manual memoization completely
+- May change effect execution frequency
+- Mimics removing all manual memoization
+
+### validatePreserveExistingMemoizationGuarantees
+
+**Type:** `boolean`  
+**Default:** `true`
+
+Validates that all `useMemo`/`useCallback` values are also memoized by the compiler.
+
+```javascript
+{
+  validatePreserveExistingMemoizationGuarantees: true
+}
+```
+
+### enablePreserveExistingManualUseMemo
+
+**Type:** `boolean`  
+**Default:** `false`
+
+When `true`, keeps existing `useMemo`/`useCallback` calls instead of pruning them.
+
+```javascript
+{
+  enablePreserveExistingManualUseMemo: false
+}
+```
+
+## Validation Options
+
+### validateHooksUsage
+
+**Type:** `boolean`  
+**Default:** `true`
+
+Validates that the component follows the Rules of Hooks.
+
+```javascript
+{
+  validateHooksUsage: true
+}
+```
+
+Checks for:
+- Conditional hook calls
+- Hook calls in loops
+- Hook calls in nested functions
+
+### validateRefAccessDuringRender
+
+**Type:** `boolean`  
+**Default:** `true`
+
+Validates that `ref.current` is not accessed during render.
+
+```javascript
+{
+  validateRefAccessDuringRender: true
+}
+```
+
+### validateNoSetStateInRender
+
+**Type:** `boolean`  
+**Default:** `true`
+
+Validates that `setState` is not called unconditionally during render.
+
+```javascript
+{
+  validateNoSetStateInRender: true
+}
+```
+
+### validateNoSetStateInEffects
+
+**Type:** `boolean`  
+**Default:** `false`
+
+Validates that `setState` is not called synchronously within effects.
+
+```javascript
+{
+  validateNoSetStateInEffects: false
+}
+```
+
+### validateExhaustiveMemoizationDependencies
+
+**Type:** `boolean`  
+**Default:** `true`
+
+Validates that dependencies in manual memoization are exhaustive.
+
+```javascript
+{
+  validateExhaustiveMemoizationDependencies: true
+}
+```
+
+### validateExhaustiveEffectDependencies
+
+**Type:** `'off' | 'all' | 'missing-only' | 'extra-only'`  
+**Default:** `'off'`
+
+Validates effect hook dependencies.
+
+```javascript
+{
+  validateExhaustiveEffectDependencies: 'all'
+}
+```
+
+- `'off'`: No validation
+- `'all'`: Report missing and extra dependencies
+- `'missing-only'`: Only report missing dependencies
+- `'extra-only'`: Only report unnecessary dependencies
+
+### validateMemoizedEffectDependencies
+
+**Type:** `boolean`  
+**Default:** `false`
+
+Validates that effect dependencies are memoized to prevent infinite renders.
+
+```javascript
+{
+  validateMemoizedEffectDependencies: true
+}
+```
+
+### validateNoDerivedComputationsInEffects
+
+**Type:** `boolean`  
+**Default:** `false`
+
+Validates that effects don't calculate derived data that could be computed during render.
+
+```javascript
+{
+  validateNoDerivedComputationsInEffects: false
+}
+```
+
+### validateNoCapitalizedCalls
+
+**Type:** `string[] | null`  
+**Default:** `null`
+
+Validates against calling capitalized functions (potential components with hooks).
+
+```javascript
+{
+  // Enable with allowlist
+  validateNoCapitalizedCalls: ['Boolean', 'String', 'Number']
+  
+  // Enable with empty allowlist (strict)
+  // validateNoCapitalizedCalls: []
+}
+```
+
+## Optimization Features
+
+### enableOptionalDependencies
+
+**Type:** `boolean`  
+**Default:** `true`
+
+Infers optional chaining in dependencies.
+
+```javascript
+{
+  enableOptionalDependencies: true
+}
+```
+
+```javascript
+// When true, infers: props?.user?.name
+const name = props?.user?.name;
+
+// When false, infers: props
+```
+
+### lowerContextAccess
+
+**Type:** `boolean`  
+**Default:** `false`
+
+Optimizes context access with selectors.
+
+```javascript
+{
+  lowerContextAccess: true
+}
+```
+
+### enableJsxOutlining
+
+**Type:** `boolean`  
+**Default:** `false`
+
+Extracts static JSX into separate components.
+
+```javascript
+{
+  enableJsxOutlining: false
+}
+```
+
+### enableFunctionOutlining
+
+**Type:** `boolean`  
+**Default:** `false`
+
+Outlines pure functions for better memoization.
+
+```javascript
+{
+  enableFunctionOutlining: false
+}
+```
+
+## Type System Options
+
+### enableUseTypeAnnotations
+
+**Type:** `boolean`  
+**Default:** `false`
+
+Trusts user-supplied type annotations for better inference.
+
+```javascript
+{
+  enableUseTypeAnnotations: false
+}
+```
+
+### flowTypeProvider
+
+**Type:** `function | null`  
+**Default:** `null`
+
+Provides Flow type information to the compiler.
+
+```javascript
+{
+  flowTypeProvider: (identifier) => {
+    // Return Flow type information
+  }
+}
+```
+
+### moduleTypeProvider
+
+**Type:** `function | null`  
+**Default:** `null`
+
+Provides module type signatures for imports.
+
+```javascript
+{
+  moduleTypeProvider: (moduleName) => {
+    // Return module type signature
+    if (moduleName === 'my-library') {
+      return {
+        // Type information
+      };
+    }
+    return null;
+  }
+}
+```
+
+## Custom Hooks and Macros
+
+### customHooks
+
+**Type:** `Map<string, Hook>`  
+**Default:** `new Map()`
+
+Defines custom hook signatures.
+
+```javascript
+{
+  customHooks: new Map([
+    ['useMyHook', {
+      effectKind: Effect.Read,
+      valueKind: ValueKind.Mutable,
+      noAlias: false,
+      transitiveMixedData: false,
+    }],
+  ])
+}
+```
+
+**Hook Configuration:**
+
+```typescript
+interface Hook {
+  // Effect of hook arguments (Read, Freeze, Store, etc.)
+  effectKind: Effect;
+  
+  // Kind of returned value (Mutable, Frozen, Primitive)
+  valueKind: ValueKind;
+  
+  // Whether arguments may be aliased
+  noAlias: boolean;
+  
+  // Whether return value is transitively mixed data
+  transitiveMixedData: boolean;
+}
+```
+
+### customMacros
+
+**Type:** `string[] | null`  
+**Default:** `null`
+
+Lists macro function names that should not be transformed.
+
+```javascript
+{
+  customMacros: ['featureflag', 'css', 'graphql']
+}
+```
+
+## Development Options
+
+### enableResetCacheOnSourceFileChanges
+
+**Type:** `boolean | null`  
+**Default:** `null`
+
+Enables HMR support by resetting cache when source changes.
+
+```javascript
+{
+  // Always enable
+  enableResetCacheOnSourceFileChanges: true,
+  
+  // Always disable
+  // enableResetCacheOnSourceFileChanges: false,
+  
+  // Conditional based on NODE_ENV (default)
+  // enableResetCacheOnSourceFileChanges: null,
+}
+```
+
+### enableEmitFreeze
+
+**Type:** `ExternalFunction | null`  
+**Default:** `null`
+
+Wraps memoized values in dev-mode mutation detector.
+
+```javascript
+{
+  enableEmitFreeze: {
+    source: 'react-compiler-runtime',
+    importSpecifierName: 'makeReadOnly',
+  }
+}
+```
+
+Generates:
+
+```javascript
+import { makeReadOnly } from 'react-compiler-runtime';
+
+function Component() {
+  const $ = _c(2);
+  if ($[0] !== props) {
+    const value = compute(props);
+    $[0] = props;
+    $[1] = __DEV__ ? makeReadOnly(value) : value;
+  }
+}
+```
+
+### validateSourceLocations
+
+**Type:** `boolean`  
+**Default:** `false`
+
+Validates that generated AST has proper source locations.
+
+```javascript
+{
+  validateSourceLocations: true
+}
+```
+
+## Advanced Options
+
+### enableAssumeHooksFollowRulesOfReact
+
+**Type:** `boolean`  
+**Default:** `true`
+
+Assumes hooks follow React's rules (freeze arguments and return values).
+
+```javascript
+{
+  enableAssumeHooksFollowRulesOfReact: true
+}
+```
+
+### enableTransitivelyFreezeFunctionExpressions
+
+**Type:** `boolean`  
+**Default:** `true`
+
+Assumes values captured by functions passed to React are not subsequently modified.
+
+```javascript
+{
+  enableTransitivelyFreezeFunctionExpressions: true
+}
+```
+
+### inferEffectDependencies
+
+**Type:** `Array<{function: ExternalFunction, autodepsIndex: number}> | null`  
+**Default:** `null`
+
+Auto-infers and inserts effect dependencies.
+
+```javascript
+{
+  inferEffectDependencies: [
+    {
+      function: {
+        source: 'react',
+        importSpecifierName: 'useEffect',
+      },
+      autodepsIndex: 1,
+    },
+  ]
+}
+```
+
+### inlineJsxTransform
+
+**Type:** `{elementSymbol: string, globalDevVar: string} | null`  
+**Default:** `null`
+
+Inlines JSX as object literals instead of using JSX runtime.
+
+```javascript
+{
+  inlineJsxTransform: {
+    elementSymbol: 'react.element',
+    globalDevVar: '__DEV__',
+  }
+}
+```
+
+## Complete Example
+
+```javascript babel.config.js
+module.exports = {
+  plugins: [
+    ['babel-plugin-react-compiler', {
+      // Memoization
+      enablePreserveExistingMemoizationGuarantees: true,
+      validatePreserveExistingMemoizationGuarantees: true,
+      
+      // Validation
+      validateHooksUsage: true,
+      validateRefAccessDuringRender: true,
+      validateNoSetStateInRender: true,
+      validateExhaustiveMemoizationDependencies: true,
+      
+      // Optimizations
+      enableOptionalDependencies: true,
+      
+      // Development
+      enableResetCacheOnSourceFileChanges: null, // Auto-detect
+      
+      // Custom hooks
+      customHooks: new Map([
+        ['useCustomHook', {
+          effectKind: 0, // Effect.Read
+          valueKind: 0,  // ValueKind.Mutable
+          noAlias: false,
+          transitiveMixedData: true,
+        }],
+      ]),
+    }],
+  ],
+};
+```
+
+## Environment-Specific Configuration
+
+<CodeGroup>
+
+```javascript Development
+module.exports = {
+  plugins: [
+    ['babel-plugin-react-compiler', {
+      enableResetCacheOnSourceFileChanges: true,
+      validateMemoizedEffectDependencies: true,
+      validateNoDerivedComputationsInEffects: true,
+      enableEmitFreeze: {
+        source: 'react-compiler-runtime',
+        importSpecifierName: 'makeReadOnly',
+      },
+    }],
+  ],
+};
+```
+
+```javascript Production
+module.exports = {
+  plugins: [
+    ['babel-plugin-react-compiler', {
+      enableResetCacheOnSourceFileChanges: false,
+      validateMemoizedEffectDependencies: false,
+      enableJsxOutlining: true,
+      enableFunctionOutlining: true,
+    }],
+  ],
+};
+```
+
+</CodeGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Babel Plugin" icon="plug" href="/compiler/babel-plugin">
+    Advanced Babel integration
+  </Card>
+  <Card title="ESLint Plugin" icon="shield-check" href="/compiler/eslint-plugin">
+    Configure linting rules
+  </Card>
+  <Card title="How It Works" icon="gear" href="/compiler/how-it-works">
+    Understand compiler behavior
+  </Card>
+  <Card title="Architecture" icon="diagram-project" href="/compiler/architecture">
+    Deep dive into compilation
+  </Card>
+</CardGroup>

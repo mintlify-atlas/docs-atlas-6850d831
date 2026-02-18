@@ -1,0 +1,625 @@
+---
+title: Hooks Overview
+description: A comprehensive guide to React Hooks and the rules for using them
+icon: fish
+---
+
+Hooks are functions that let you "hook into" React state and lifecycle features from function components. They were introduced in React 16.8 to allow function components to have state and side effects without needing to convert to class components.
+
+## Why Hooks?
+
+Hooks solve several problems:
+
+- **Reusable stateful logic**: Share logic between components without wrapper hell
+- **Simpler components**: No need for class components and `this` keyword
+- **Better code organization**: Group related logic together instead of splitting it across lifecycle methods
+- **Smaller bundle sizes**: Function components are smaller than classes
+
+## Rules of Hooks
+
+<Warning>
+  **Critical**: You must follow these rules when using Hooks, or your component will break:
+
+  1. **Only call Hooks at the top level**: Don't call Hooks inside loops, conditions, or nested functions
+  2. **Only call Hooks from React functions**: Call them from function components or custom Hooks, not regular JavaScript functions
+  
+  According to React's source code in `ReactHooks.js`, if these rules are violated, you'll see an error:
+  ```
+  Invalid hook call. Hooks can only be called inside of the body of a function component.
+  ```
+</Warning>
+
+```jsx
+// ❌ Don't call Hooks conditionally
+function Component() {
+  if (condition) {
+    const [state, setState] = useState(0); // Wrong!
+  }
+}
+
+// ✅ Call Hooks at the top level
+function Component() {
+  const [state, setState] = useState(0);
+  
+  if (condition) {
+    // Use state here
+  }
+}
+```
+
+## Built-in Hooks
+
+React provides several built-in Hooks. Below is a comprehensive overview based on React's source code.
+
+### State Hooks
+
+#### useState
+
+Adds state to function components:
+
+```jsx
+import { useState } from 'react';
+
+function Counter() {
+  const [count, setCount] = useState(0);
+  
+  return (
+    <button onClick={() => setCount(count + 1)}>
+      Count: {count}
+    </button>
+  );
+}
+```
+
+The initial state can be a value or a function:
+
+```jsx
+// Direct value
+const [count, setCount] = useState(0);
+
+// Function (for expensive calculations)
+const [items, setItems] = useState(() => {
+  return loadItemsFromStorage();
+});
+```
+
+#### useReducer
+
+An alternative to `useState` for complex state logic:
+
+```jsx
+import { useReducer } from 'react';
+
+function reducer(state, action) {
+  switch (action.type) {
+    case 'increment':
+      return { count: state.count + 1 };
+    case 'decrement':
+      return { count: state.count - 1 };
+    default:
+      return state;
+  }
+}
+
+function Counter() {
+  const [state, dispatch] = useReducer(reducer, { count: 0 });
+  
+  return (
+    <div>
+      <p>Count: {state.count}</p>
+      <button onClick={() => dispatch({ type: 'increment' })}>
+        +
+      </button>
+      <button onClick={() => dispatch({ type: 'decrement' })}>
+        -
+      </button>
+    </div>
+  );
+}
+```
+
+### Effect Hooks
+
+#### useEffect
+
+Performs side effects in function components:
+
+```jsx
+import { useEffect, useState } from 'react';
+
+function UserProfile({ userId }) {
+  const [user, setUser] = useState(null);
+  
+  useEffect(() => {
+    fetch(`/api/users/${userId}`)
+      .then(res => res.json())
+      .then(setUser);
+  }, [userId]);
+  
+  return <div>{user?.name}</div>;
+}
+```
+
+#### useLayoutEffect
+
+Like `useEffect`, but fires synchronously after DOM mutations:
+
+```jsx
+import { useLayoutEffect, useRef } from 'react';
+
+function Tooltip() {
+  const ref = useRef();
+  
+  useLayoutEffect(() => {
+    // Measure and position before paint
+    const { height } = ref.current.getBoundingClientRect();
+    ref.current.style.marginTop = `-${height}px`;
+  });
+  
+  return <div ref={ref}>Tooltip</div>;
+}
+```
+
+#### useInsertionEffect
+
+Fires before all DOM mutations, primarily for CSS-in-JS libraries:
+
+```jsx
+import { useInsertionEffect } from 'react';
+
+function useCSS(rule) {
+  useInsertionEffect(() => {
+    const style = document.createElement('style');
+    style.textContent = rule;
+    document.head.appendChild(style);
+    return () => document.head.removeChild(style);
+  }, [rule]);
+}
+```
+
+### Context Hook
+
+#### useContext
+
+Reads the current value from a context:
+
+```jsx
+import { useContext, createContext } from 'react';
+
+const ThemeContext = createContext('light');
+
+function Button() {
+  const theme = useContext(ThemeContext);
+  
+  return (
+    <button className={`btn-${theme}`}>
+      Themed Button
+    </button>
+  );
+}
+
+function App() {
+  return (
+    <ThemeContext.Provider value="dark">
+      <Button />
+    </ThemeContext.Provider>
+  );
+}
+```
+
+<Note>
+  According to React's source code, calling `useContext(Context.Consumer)` is not supported and will cause bugs. Always call `useContext(Context)` instead.
+</Note>
+
+### Ref Hook
+
+#### useRef
+
+Creates a mutable ref object that persists across renders:
+
+```jsx
+import { useRef, useEffect } from 'react';
+
+function TextInput() {
+  const inputRef = useRef(null);
+  
+  useEffect(() => {
+    inputRef.current.focus();
+  }, []);
+  
+  return <input ref={inputRef} />;
+}
+```
+
+Refs are also useful for storing mutable values:
+
+```jsx
+function Timer() {
+  const intervalRef = useRef(null);
+  const [count, setCount] = useState(0);
+  
+  const start = () => {
+    intervalRef.current = setInterval(() => {
+      setCount(c => c + 1);
+    }, 1000);
+  };
+  
+  const stop = () => {
+    clearInterval(intervalRef.current);
+  };
+  
+  return (
+    <div>
+      <p>{count}</p>
+      <button onClick={start}>Start</button>
+      <button onClick={stop}>Stop</button>
+    </div>
+  );
+}
+```
+
+### Performance Hooks
+
+#### useMemo
+
+Memoizes a computed value:
+
+```jsx
+import { useMemo } from 'react';
+
+function ExpensiveComponent({ data }) {
+  const processedData = useMemo(() => {
+    return data.map(item => expensiveOperation(item));
+  }, [data]);
+  
+  return <List items={processedData} />;
+}
+```
+
+#### useCallback
+
+Memoizes a function:
+
+```jsx
+import { useCallback } from 'react';
+
+function Parent() {
+  const [count, setCount] = useState(0);
+  
+  const handleClick = useCallback(() => {
+    setCount(c => c + 1);
+  }, []);
+  
+  return <Child onClick={handleClick} />;
+}
+```
+
+<Tip>
+  Only use `useMemo` and `useCallback` when you have a proven performance problem. They add memory overhead and complexity, so don't use them prematurely.
+</Tip>
+
+### Transition Hooks
+
+#### useTransition
+
+Marks state updates as non-urgent (transitions):
+
+```jsx
+import { useTransition, useState } from 'react';
+
+function SearchResults() {
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState([]);
+  const [isPending, startTransition] = useTransition();
+  
+  const handleChange = (e) => {
+    const value = e.target.value;
+    setQuery(value); // Urgent update
+    
+    startTransition(() => {
+      // Non-urgent update
+      setResults(searchData(value));
+    });
+  };
+  
+  return (
+    <div>
+      <input value={query} onChange={handleChange} />
+      {isPending && <p>Loading...</p>}
+      <List items={results} />
+    </div>
+  );
+}
+```
+
+#### useDeferredValue
+
+Defers updating a value:
+
+```jsx
+import { useDeferredValue, useState } from 'react';
+
+function SearchResults({ query }) {
+  const deferredQuery = useDeferredValue(query);
+  
+  // This will use the deferred value
+  const results = useMemo(() => {
+    return searchData(deferredQuery);
+  }, [deferredQuery]);
+  
+  return <List items={results} />;
+}
+```
+
+### Other Hooks
+
+#### useId
+
+Generates unique IDs for accessibility attributes:
+
+```jsx
+import { useId } from 'react';
+
+function FormField() {
+  const id = useId();
+  
+  return (
+    <>
+      <label htmlFor={id}>Name:</label>
+      <input id={id} />
+    </>
+  );
+}
+```
+
+#### useSyncExternalStore
+
+Subscribes to an external store:
+
+```jsx
+import { useSyncExternalStore } from 'react';
+
+function useOnlineStatus() {
+  return useSyncExternalStore(
+    (callback) => {
+      window.addEventListener('online', callback);
+      window.addEventListener('offline', callback);
+      return () => {
+        window.removeEventListener('online', callback);
+        window.removeEventListener('offline', callback);
+      };
+    },
+    () => navigator.onLine,
+    () => true // Server snapshot
+  );
+}
+```
+
+#### useImperativeHandle
+
+Customizes the ref value exposed to parent components:
+
+```jsx
+import { useImperativeHandle, useRef, forwardRef } from 'react';
+
+const FancyInput = forwardRef((props, ref) => {
+  const inputRef = useRef();
+  
+  useImperativeHandle(ref, () => ({
+    focus: () => inputRef.current.focus(),
+    clear: () => inputRef.current.value = ''
+  }));
+  
+  return <input ref={inputRef} />;
+});
+```
+
+#### useDebugValue
+
+Displays a label in React DevTools:
+
+```jsx
+import { useDebugValue } from 'react';
+
+function useFriendStatus(friendId) {
+  const [isOnline, setIsOnline] = useState(false);
+  
+  useDebugValue(isOnline ? 'Online' : 'Offline');
+  
+  return isOnline;
+}
+```
+
+### Experimental Hooks
+
+These are available in React but may change:
+
+#### useOptimistic
+
+Shows optimistic state during async operations:
+
+```jsx
+import { useOptimistic } from 'react';
+
+function TodoList({ todos, addTodo }) {
+  const [optimisticTodos, addOptimisticTodo] = useOptimistic(
+    todos,
+    (state, newTodo) => [...state, { ...newTodo, pending: true }]
+  );
+  
+  const handleAdd = async (text) => {
+    addOptimisticTodo({ id: Date.now(), text });
+    await addTodo(text);
+  };
+  
+  return (
+    <ul>
+      {optimisticTodos.map(todo => (
+        <li key={todo.id} style={{ opacity: todo.pending ? 0.5 : 1 }}>
+          {todo.text}
+        </li>
+      ))}
+    </ul>
+  );
+}
+```
+
+#### useActionState
+
+Manages state for form actions:
+
+```jsx
+import { useActionState } from 'react';
+
+function Form() {
+  const [state, formAction, isPending] = useActionState(
+    async (previousState, formData) => {
+      const response = await submitForm(formData);
+      return response;
+    },
+    null
+  );
+  
+  return (
+    <form action={formAction}>
+      <input name="text" />
+      <button disabled={isPending}>Submit</button>
+      {state?.message && <p>{state.message}</p>}
+    </form>
+  );
+}
+```
+
+#### use
+
+Reads the value of a Promise or Context:
+
+```jsx
+import { use } from 'react';
+
+function UserName({ userPromise }) {
+  const user = use(userPromise);
+  return <p>{user.name}</p>;
+}
+```
+
+## Complete Hook List from React Source
+
+Based on `ReactHooks.js`, here are all available hooks:
+
+- `useState` - State management
+- `useReducer` - Complex state management
+- `useRef` - Mutable refs
+- `useEffect` - Side effects
+- `useLayoutEffect` - Synchronous side effects
+- `useInsertionEffect` - CSS injection
+- `useContext` - Read context
+- `useCallback` - Memoize functions
+- `useMemo` - Memoize values
+- `useImperativeHandle` - Customize ref
+- `useDebugValue` - DevTools label
+- `useTransition` - Non-urgent updates
+- `useDeferredValue` - Defer value updates
+- `useId` - Unique IDs
+- `useSyncExternalStore` - External store subscription
+- `useOptimistic` - Optimistic UI
+- `useActionState` - Form actions
+- `use` - Read promises/context
+
+## Custom Hooks
+
+You can create your own Hooks to reuse stateful logic:
+
+```jsx
+import { useState, useEffect } from 'react';
+
+// Custom Hook
+function useWindowSize() {
+  const [size, setSize] = useState({
+    width: window.innerWidth,
+    height: window.innerHeight
+  });
+  
+  useEffect(() => {
+    function handleResize() {
+      setSize({
+        width: window.innerWidth,
+        height: window.innerHeight
+      });
+    }
+    
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+  
+  return size;
+}
+
+// Usage
+function Component() {
+  const { width, height } = useWindowSize();
+  return <p>Window is {width}x{height}</p>;
+}
+```
+
+<Note>
+  Custom Hooks must start with "use" (like `useWindowSize`, `useFetch`, etc). This convention is important because it lets React check for Hook rule violations.
+</Note>
+
+## Common Patterns
+
+### Fetching Data
+
+```jsx
+function useData(url) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  
+  useEffect(() => {
+    setLoading(true);
+    fetch(url)
+      .then(res => res.json())
+      .then(data => {
+        setData(data);
+        setLoading(false);
+      })
+      .catch(err => {
+        setError(err);
+        setLoading(false);
+      });
+  }, [url]);
+  
+  return { data, loading, error };
+}
+```
+
+### Form Handling
+
+```jsx
+function useForm(initialValues) {
+  const [values, setValues] = useState(initialValues);
+  
+  const handleChange = (e) => {
+    setValues({
+      ...values,
+      [e.target.name]: e.target.value
+    });
+  };
+  
+  const reset = () => setValues(initialValues);
+  
+  return { values, handleChange, reset };
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Rendering" icon="paintbrush" href="/concepts/rendering">
+    Learn how React renders and updates the DOM
+  </Card>
+  <Card title="Lifecycle" icon="rotate" href="/concepts/lifecycle">
+    Understand component lifecycle in depth
+  </Card>
+</CardGroup>

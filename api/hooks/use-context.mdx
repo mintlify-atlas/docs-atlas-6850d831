@@ -1,0 +1,419 @@
+---
+title: useContext
+description: Read and subscribe to a context value from your component
+---
+
+`useContext` is a React Hook that lets you read and subscribe to a context from your component.
+
+```typescript
+function useContext<T>(Context: ReactContext<T>): T
+```
+
+## Parameters
+
+<ParamField path="Context" type="ReactContext<T>" required>
+  The context object that you previously created with `createContext`. The context itself does not hold the information, it only represents the kind of information you can provide or read from components.
+  
+  <Warning>
+  Pass the context itself (created by `createContext`), not `Context.Consumer` or `Context.Provider`.
+  </Warning>
+</ParamField>
+
+## Returns
+
+`useContext` returns the context value for the calling component. It is determined as the value passed to the closest `Context.Provider` above the calling component in the tree. If there is no such provider, the returned value will be the `defaultValue` you passed to `createContext` for that context.
+
+The returned value is always up-to-date. React automatically re-renders components that read a context if the context value changes.
+
+## Usage
+
+### Passing data deeply into the tree
+
+Call `useContext` at the top level of your component to read context:
+
+```javascript
+import { createContext, useContext } from 'react';
+
+const ThemeContext = createContext('light');
+
+function App() {
+  return (
+    <ThemeContext.Provider value="dark">
+      <Page />
+    </ThemeContext.Provider>
+  );
+}
+
+function Page() {
+  return (
+    <div>
+      <Header />
+      <Content />
+    </div>
+  );
+}
+
+function Header() {
+  const theme = useContext(ThemeContext);
+  return <header className={theme}>Header</header>;
+}
+
+function Content() {
+  const theme = useContext(ThemeContext);
+  return <main className={theme}>Content</main>;
+}
+```
+
+### Updating data passed via context
+
+Often, you want the context to change over time. To update context, combine it with state:
+
+```javascript
+import { createContext, useContext, useState } from 'react';
+
+const ThemeContext = createContext(null);
+
+function App() {
+  const [theme, setTheme] = useState('light');
+  
+  return (
+    <ThemeContext.Provider value={theme}>
+      <Page />
+      <button onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}>
+        Toggle theme
+      </button>
+    </ThemeContext.Provider>
+  );
+}
+
+function Page() {
+  const theme = useContext(ThemeContext);
+  return <div className={theme}>Page content</div>;
+}
+```
+
+### Passing multiple values
+
+You can pass any JavaScript value, including objects:
+
+```javascript
+const UserContext = createContext(null);
+
+function App() {
+  const [user, setUser] = useState({
+    name: 'Alice',
+    avatar: '/avatars/alice.jpg'
+  });
+  
+  return (
+    <UserContext.Provider value={{ user, setUser }}>
+      <Profile />
+    </UserContext.Provider>
+  );
+}
+
+function Profile() {
+  const { user, setUser } = useContext(UserContext);
+  
+  return (
+    <div>
+      <img src={user.avatar} alt={user.name} />
+      <h1>{user.name}</h1>
+      <button onClick={() => setUser({ ...user, name: 'Bob' })}>
+        Change name
+      </button>
+    </div>
+  );
+}
+```
+
+<Warning>
+When passing objects as context values, be careful about creating new objects on every render. This will cause all consumers to re-render. Consider using `useMemo`:
+
+```javascript
+const value = useMemo(() => ({ user, setUser }), [user]);
+
+return (
+  <UserContext.Provider value={value}>
+    {children}
+  </UserContext.Provider>
+);
+```
+</Warning>
+
+### Specifying a fallback default value
+
+If React can't find any providers of that particular context in the parent tree, the context value returned by `useContext` will be equal to the default value:
+
+```javascript
+const ThemeContext = createContext('light'); // Default value
+
+function Button() {
+  // Returns 'light' if no Provider is found
+  const theme = useContext(ThemeContext);
+  return <button className={theme}>Click me</button>;
+}
+
+// This works without a Provider:
+function App() {
+  return <Button />; // Uses default 'light'
+}
+```
+
+### Overriding context for a part of the tree
+
+You can override the context for a part of the tree by wrapping that part in a provider with a different value:
+
+```javascript
+function App() {
+  return (
+    <ThemeContext.Provider value="dark">
+      <Page />
+      <ThemeContext.Provider value="light">
+        <Sidebar />
+      </ThemeContext.Provider>
+    </ThemeContext.Provider>
+  );
+}
+
+function Page() {
+  const theme = useContext(ThemeContext); // 'dark'
+  return <div className={theme}>Page</div>;
+}
+
+function Sidebar() {
+  const theme = useContext(ThemeContext); // 'light'
+  return <aside className={theme}>Sidebar</aside>;
+}
+```
+
+## Common Patterns
+
+### Custom hook for context
+
+Create a custom hook to make context usage more convenient:
+
+```javascript
+import { createContext, useContext, useState } from 'react';
+
+const AuthContext = createContext(null);
+
+export function AuthProvider({ children }) {
+  const [user, setUser] = useState(null);
+  
+  const login = async (email, password) => {
+    const user = await loginAPI(email, password);
+    setUser(user);
+  };
+  
+  const logout = () => {
+    setUser(null);
+  };
+  
+  return (
+    <AuthContext.Provider value={{ user, login, logout }}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+export function useAuth() {
+  const context = useContext(AuthContext);
+  if (context === null) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+}
+
+// Usage in components:
+function Profile() {
+  const { user, logout } = useAuth();
+  return <button onClick={logout}>Logout {user.name}</button>;
+}
+```
+
+### Multiple contexts
+
+You can use multiple contexts in the same component:
+
+```javascript
+function Component() {
+  const theme = useContext(ThemeContext);
+  const user = useContext(UserContext);
+  const language = useContext(LanguageContext);
+  
+  return <div className={theme}>{user.name}</div>;
+}
+```
+
+### Context with reducer
+
+Combine context with `useReducer` for more complex state management:
+
+```javascript
+import { createContext, useContext, useReducer } from 'react';
+
+const TodoContext = createContext(null);
+
+function todoReducer(state, action) {
+  switch (action.type) {
+    case 'added':
+      return [...state, { id: action.id, text: action.text }];
+    case 'deleted':
+      return state.filter(t => t.id !== action.id);
+    default:
+      throw Error('Unknown action: ' + action.type);
+  }
+}
+
+export function TodoProvider({ children }) {
+  const [todos, dispatch] = useReducer(todoReducer, []);
+  
+  return (
+    <TodoContext.Provider value={{ todos, dispatch }}>
+      {children}
+    </TodoContext.Provider>
+  );
+}
+
+export function useTodos() {
+  const context = useContext(TodoContext);
+  if (!context) {
+    throw new Error('useTodos must be used within TodoProvider');
+  }
+  return context;
+}
+```
+
+## TypeScript
+
+```typescript
+import { createContext, useContext, ReactNode } from 'react';
+
+interface Theme {
+  colors: {
+    primary: string;
+    background: string;
+  };
+}
+
+const ThemeContext = createContext<Theme | null>(null);
+
+interface ThemeProviderProps {
+  children: ReactNode;
+}
+
+export function ThemeProvider({ children }: ThemeProviderProps) {
+  const theme: Theme = {
+    colors: {
+      primary: '#007bff',
+      background: '#ffffff'
+    }
+  };
+  
+  return (
+    <ThemeContext.Provider value={theme}>
+      {children}
+    </ThemeContext.Provider>
+  );
+}
+
+export function useTheme(): Theme {
+  const context = useContext(ThemeContext);
+  if (context === null) {
+    throw new Error('useTheme must be used within ThemeProvider');
+  }
+  return context;
+}
+
+// Usage
+function Component() {
+  const theme = useTheme();
+  return <div style={{ color: theme.colors.primary }}>Text</div>;
+}
+```
+
+## Troubleshooting
+
+### I can't get a different value from my provider
+
+Make sure you're reading context inside a component that is a child of the provider:
+
+```javascript
+// ❌ Component is not inside Provider
+function App() {
+  return (
+    <>
+      <Header /> {/* Won't get provider value */}
+      <ThemeContext.Provider value="dark">
+        <Page /> {/* Will get provider value */}
+      </ThemeContext.Provider>
+    </>
+  );
+}
+
+// ✅ All components inside Provider
+function App() {
+  return (
+    <ThemeContext.Provider value="dark">
+      <Header /> {/* Gets provider value */}
+      <Page /> {/* Gets provider value */}
+    </ThemeContext.Provider>
+  );
+}
+```
+
+### I always get undefined from my context
+
+You might be passing `Context.Consumer` instead of the context itself:
+
+```javascript
+// ❌ Wrong
+const value = useContext(ThemeContext.Consumer);
+
+// ✅ Correct
+const value = useContext(ThemeContext);
+```
+
+### My component doesn't re-render when context changes
+
+Make sure the value you pass to the provider actually changes:
+
+```javascript
+// ❌ New object every render, but same values
+function App() {
+  return (
+    <UserContext.Provider value={{ name: 'Alice' }}>
+      {children}
+    </UserContext.Provider>
+  );
+}
+
+// ✅ Use state or useMemo
+function App() {
+  const [user] = useState({ name: 'Alice' });
+  return (
+    <UserContext.Provider value={user}>
+      {children}
+    </UserContext.Provider>
+  );
+}
+```
+
+### My context updates cause too many re-renders
+
+Split your context into multiple contexts to avoid unnecessary re-renders:
+
+```javascript
+// Instead of one context with everything:
+const AppContext = createContext({ user, theme, settings, ... });
+
+// Split into multiple contexts:
+const UserContext = createContext(null);
+const ThemeContext = createContext(null);
+const SettingsContext = createContext(null);
+
+// Components only re-render when their specific context changes
+```
+
+Or use a state management library like Redux, Zustand, or Jotai for complex state.

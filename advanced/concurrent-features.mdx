@@ -1,0 +1,503 @@
+---
+title: Concurrent Features
+description: Use React's concurrent features like transitions, deferred values, and concurrent rendering to build responsive UIs.
+---
+
+## Overview
+
+React's concurrent features allow you to keep your app responsive during expensive updates. These features include transitions, deferred values, and concurrent rendering, which help prioritize urgent updates over less important ones.
+
+## Transitions
+
+Transitions allow you to mark updates as non-urgent, keeping the UI responsive during expensive operations.
+
+### useTransition Hook
+
+From `packages/react/src/ReactHooks.js:170`:
+
+```javascript
+function useTransition(): [
+  boolean,
+  (callback: () => void, options?: StartTransitionOptions) => void
+]
+```
+
+### Basic Usage
+
+```javascript
+import { useState, useTransition } from 'react';
+
+function SearchResults() {
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState([]);
+  const [isPending, startTransition] = useTransition();
+  
+  const handleChange = (e) => {
+    const value = e.target.value;
+    setQuery(value); // Urgent: update input immediately
+    
+    startTransition(() => {
+      // Non-urgent: can be interrupted
+      setResults(filterResults(value));
+    });
+  };
+  
+  return (
+    <div>
+      <input
+        type="text"
+        value={query}
+        onChange={handleChange}
+        placeholder="Search..."
+      />
+      {isPending && <div>Updating results...</div>}
+      <ResultsList results={results} />
+    </div>
+  );
+}
+```
+
+### startTransition API
+
+From `packages/react/src/ReactStartTransition.js:45`:
+
+```javascript
+function startTransition(
+  scope: () => void,
+  options?: StartTransitionOptions
+): void
+```
+
+### Standalone startTransition
+
+Use `startTransition` outside of components:
+
+```javascript
+import { startTransition } from 'react';
+
+function updateGlobalState(newValue) {
+  startTransition(() => {
+    // This update can be interrupted
+    globalState.value = newValue;
+  });
+}
+```
+
+## Transition Internal Implementation
+
+From `packages/react/src/ReactStartTransition.js:30`:
+
+```javascript
+type Transition = {
+  types: null | TransitionTypes,
+  gesture: null | GestureProvider,
+  name: null | string,
+  startTime: number,
+  _updatedFibers: Set<Fiber>,
+};
+```
+
+Transitions track:
+- **types**: View transition types (experimental)
+- **gesture**: Gesture providers (experimental)
+- **name**: Debug name for transition tracing
+- **startTime**: When the transition started
+- **_updatedFibers**: Fibers updated during transition (dev only)
+
+## Deferred Values
+
+Deferred values let you defer updating a part of the UI until more urgent updates have finished.
+
+### useDeferredValue Hook
+
+From `packages/react/src/ReactHooks.js:178`:
+
+```javascript
+function useDeferredValue<T>(value: T, initialValue?: T): T
+```
+
+### Basic Usage
+
+```javascript
+import { useState, useDeferredValue, memo } from 'react';
+
+function App() {
+  const [text, setText] = useState('');
+  const deferredText = useDeferredValue(text);
+  
+  return (
+    <div>
+      <input
+        type="text"
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        placeholder="Type to search..."
+      />
+      {/* This updates immediately */}
+      <p>Current: {text}</p>
+      {/* This updates after urgent work is done */}
+      <ExpensiveComponent text={deferredText} />
+    </div>
+  );
+}
+
+const ExpensiveComponent = memo(function ExpensiveComponent({ text }) {
+  // Expensive rendering logic
+  const items = generateManyItems(text);
+  
+  return (
+    <div>
+      {items.map(item => (
+        <div key={item.id}>{item.name}</div>
+      ))}
+    </div>
+  );
+});
+```
+
+### With Loading Indicator
+
+```javascript
+import { useState, useDeferredValue } from 'react';
+
+function SearchResults() {
+  const [query, setQuery] = useState('');
+  const deferredQuery = useDeferredValue(query);
+  const isStale = query !== deferredQuery;
+  
+  return (
+    <div>
+      <input
+        type="text"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+      />
+      <div style={{ opacity: isStale ? 0.5 : 1 }}>
+        <Results query={deferredQuery} />
+      </div>
+    </div>
+  );
+}
+```
+
+## Transition vs Deferred Value
+
+**Use useTransition when:**
+- You control the state update
+- You want to show pending state
+- You need to start transitions imperatively
+
+**Use useDeferredValue when:**
+- You receive a value from props or another hook
+- You want to defer rendering of received values
+- You want to show stale content during updates
+
+## Practical Examples
+
+### Tab Switching
+
+```javascript
+import { useState, useTransition } from 'react';
+
+function TabContainer() {
+  const [tab, setTab] = useState('home');
+  const [isPending, startTransition] = useTransition();
+  
+  const selectTab = (nextTab) => {
+    startTransition(() => {
+      setTab(nextTab);
+    });
+  };
+  
+  return (
+    <div>
+      <nav>
+        <button
+          onClick={() => selectTab('home')}
+          disabled={isPending && tab !== 'home'}
+        >
+          Home
+        </button>
+        <button
+          onClick={() => selectTab('posts')}
+          disabled={isPending && tab !== 'posts'}
+        >
+          Posts {isPending && tab === 'posts' && '(Loading...)'}
+        </button>
+        <button
+          onClick={() => selectTab('contact')}
+          disabled={isPending && tab !== 'contact'}
+        >
+          Contact
+        </button>
+      </nav>
+      
+      <div style={{ opacity: isPending ? 0.7 : 1 }}>
+        {tab === 'home' && <HomeTab />}
+        {tab === 'posts' && <PostsTab />}
+        {tab === 'contact' && <ContactTab />}
+      </div>
+    </div>
+  );
+}
+```
+
+### Search with Debounced Results
+
+```javascript
+import { useState, useDeferredValue, useMemo } from 'react';
+
+function Search({ items }) {
+  const [searchTerm, setSearchTerm] = useState('');
+  const deferredSearchTerm = useDeferredValue(searchTerm);
+  
+  const filteredItems = useMemo(() => {
+    // Expensive filtering operation
+    return items.filter(item =>
+      item.name.toLowerCase().includes(deferredSearchTerm.toLowerCase())
+    );
+  }, [items, deferredSearchTerm]);
+  
+  const isSearching = searchTerm !== deferredSearchTerm;
+  
+  return (
+    <div>
+      <input
+        type="search"
+        value={searchTerm}
+        onChange={(e) => setSearchTerm(e.target.value)}
+        placeholder="Search items..."
+      />
+      
+      {isSearching && <div className="searching-indicator">Searching...</div>}
+      
+      <div style={{ opacity: isSearching ? 0.5 : 1 }}>
+        <p>Found {filteredItems.length} items</p>
+        <ul>
+          {filteredItems.map(item => (
+            <li key={item.id}>{item.name}</li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+}
+```
+
+### Router Navigation
+
+```javascript
+import { useState, useTransition } from 'react';
+import { useNavigate } from 'react-router-dom';
+
+function Navigation() {
+  const navigate = useNavigate();
+  const [isPending, startTransition] = useTransition();
+  
+  const navigateTo = (path) => {
+    startTransition(() => {
+      navigate(path);
+    });
+  };
+  
+  return (
+    <nav>
+      <button
+        onClick={() => navigateTo('/home')}
+        disabled={isPending}
+      >
+        Home
+      </button>
+      <button
+        onClick={() => navigateTo('/dashboard')}
+        disabled={isPending}
+      >
+        Dashboard {isPending && '...'}
+      </button>
+      <button
+        onClick={() => navigateTo('/settings')}
+        disabled={isPending}
+      >
+        Settings
+      </button>
+    </nav>
+  );
+}
+```
+
+### Optimistic Updates
+
+```javascript
+import { useState, useTransition } from 'react';
+
+function TodoList() {
+  const [todos, setTodos] = useState([]);
+  const [isPending, startTransition] = useTransition();
+  
+  const addTodo = async (text) => {
+    const tempId = Math.random();
+    
+    // Optimistic update
+    setTodos(prev => [...prev, { id: tempId, text, pending: true }]);
+    
+    startTransition(async () => {
+      try {
+        const response = await fetch('/api/todos', {
+          method: 'POST',
+          body: JSON.stringify({ text })
+        });
+        const newTodo = await response.json();
+        
+        // Replace temp todo with real one
+        setTodos(prev =>
+          prev.map(todo =>
+            todo.id === tempId ? newTodo : todo
+          )
+        );
+      } catch (error) {
+        // Rollback on error
+        setTodos(prev => prev.filter(todo => todo.id !== tempId));
+      }
+    });
+  };
+  
+  return (
+    <div>
+      <input
+        type="text"
+        onKeyPress={(e) => {
+          if (e.key === 'Enter') {
+            addTodo(e.target.value);
+            e.target.value = '';
+          }
+        }}
+        placeholder="Add todo..."
+      />
+      
+      <ul>
+        {todos.map(todo => (
+          <li
+            key={todo.id}
+            style={{ opacity: todo.pending ? 0.5 : 1 }}
+          >
+            {todo.text}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+```
+
+## Transition Warning
+
+<Warning>
+From `packages/react/src/ReactStartTransition.js:193`, React warns about excessive updates in transitions:
+
+```javascript
+if (updatedFibersCount > 10) {
+  console.warn(
+    'Detected a large number of updates inside startTransition. ' +
+    'If this is due to a subscription please re-write it to use React provided hooks. ' +
+    'Otherwise concurrent mode guarantees are off the table.'
+  );
+}
+```
+
+Avoid subscribing to external stores inside transitions. Use React's hooks instead.
+</Warning>
+
+## Async Transitions
+
+From `packages/react/src/ReactStartTransition.js:82`, transitions can be async:
+
+```javascript
+startTransition(async () => {
+  // Async operations are supported
+  const data = await fetchData();
+  setState(data);
+});
+```
+
+## Gesture Transitions (Experimental)
+
+From `packages/react/src/ReactStartTransition.js:119`:
+
+```javascript
+import { unstable_startGestureTransition as startGestureTransition } from 'react';
+
+startGestureTransition(
+  provider,
+  () => {
+    // Transition updates
+  },
+  options
+);
+```
+
+<Warning>
+This API is experimental and not yet stable. Async functions are not supported in gesture transitions.
+</Warning>
+
+## Best Practices
+
+1. **Prioritize user input**: Keep input updates outside transitions
+
+2. **Show loading states**: Use `isPending` to provide feedback
+
+3. **Memoize expensive computations**: Combine with `useMemo` and `memo`
+
+4. **Avoid transition abuse**: Don't wrap everything in transitions
+
+5. **Test on slow devices**: Transitions are most valuable on slower hardware
+
+6. **Use appropriate indicators**: Show subtle indicators for deferred updates
+
+7. **Handle errors**: Transitions can fail, handle errors appropriately
+
+## Performance Considerations
+
+1. **Interruption**: Transitions can be interrupted by urgent updates
+
+2. **Batching**: React batches multiple transition updates
+
+3. **Priority**: Urgent updates always take priority over transitions
+
+4. **Memory**: Transitions keep old UI in memory briefly
+
+## Debugging Transitions
+
+```javascript
+import { useState, useTransition, useEffect } from 'react';
+
+function DebugTransition() {
+  const [count, setCount] = useState(0);
+  const [isPending, startTransition] = useTransition();
+  
+  useEffect(() => {
+    console.log('Transition pending:', isPending);
+  }, [isPending]);
+  
+  const handleClick = () => {
+    startTransition(() => {
+      console.log('Transition started');
+      setCount(c => c + 1);
+      console.log('Transition update queued');
+    });
+  };
+  
+  return (
+    <div>
+      <button onClick={handleClick}>Increment</button>
+      <p>Count: {count}</p>
+      <p>Pending: {isPending.toString()}</p>
+    </div>
+  );
+}
+```
+
+## See Also
+
+- [Suspense](/advanced/suspense) - Loading states for async operations
+- [Hooks](/api/hooks) - All available React hooks
+- [Performance](/guides/performance) - Optimization techniques

@@ -1,0 +1,400 @@
+---
+title: Props and State
+description: Understanding how to pass data with props and manage component state
+icon: database
+---
+
+Props and state are both plain JavaScript objects that hold information that influences the output of render. The key difference is that state is managed within the component, while props are passed to the component from its parent.
+
+## Props: Passing Data
+
+Props (short for "properties") are how components communicate with each other. A parent component can pass information to a child component by giving them props.
+
+### Reading Props
+
+<Tabs>
+  <Tab title="Function Components">
+    ```jsx
+function Welcome(props) {
+  return <h1>Hello, {props.name}!</h1>;
+}
+
+// Using destructuring
+function Welcome({ name }) {
+  return <h1>Hello, {name}!</h1>;
+}
+
+// Usage
+<Welcome name="Alice" />
+    ```
+  </Tab>
+  
+  <Tab title="Class Components">
+    ```jsx
+import { Component } from 'react';
+
+class Welcome extends Component {
+  render() {
+    return <h1>Hello, {this.props.name}!</h1>;
+  }
+}
+
+// Usage
+<Welcome name="Alice" />
+    ```
+  </Tab>
+</Tabs>
+
+### Passing Props
+
+You can pass any type of value as a prop:
+
+```jsx
+function UserProfile() {
+  return (
+    <ProfileCard
+      name="Alice"
+      age={25}
+      isActive={true}
+      hobbies={['reading', 'coding', 'hiking']}
+      address={{ city: 'New York', country: 'USA' }}
+      onUpdate={handleUpdate}
+    />
+  );
+}
+```
+
+### Props are Immutable
+
+Props are **read-only**. A component must never modify its own props:
+
+```jsx
+// ❌ Never do this
+function Avatar(props) {
+  props.size = 100; // Error: props is read-only
+  return <img src={props.url} />;
+}
+
+// ✅ Create a new variable instead
+function Avatar(props) {
+  const size = props.size || 100;
+  return <img src={props.url} width={size} />;
+}
+```
+
+<Note>
+  **Pure Functions**: React components must act like pure functions with respect to their props. Given the same props, a component should always render the same output.
+</Note>
+
+### Default Props
+
+You can specify default values for props:
+
+```jsx
+function Button({ text, variant = 'primary', disabled = false }) {
+  return (
+    <button className={`btn btn-${variant}`} disabled={disabled}>
+      {text}
+    </button>
+  );
+}
+
+// Or for class components
+class Button extends Component {
+  render() {
+    return (
+      <button className={`btn btn-${this.props.variant}`}>
+        {this.props.text}
+      </button>
+    );
+  }
+}
+
+Button.defaultProps = {
+  variant: 'primary',
+  disabled: false
+};
+```
+
+### Spreading Props
+
+You can forward all props using the spread operator:
+
+```jsx
+function Button(props) {
+  return <button className="btn" {...props} />;
+}
+
+// Usage
+<Button onClick={handleClick} disabled={isLoading}>
+  Submit
+</Button>
+```
+
+<Warning>
+  Be careful when spreading props - make sure you're not passing invalid HTML attributes to DOM elements or exposing internal implementation details.
+</Warning>
+
+## State: Component Memory
+
+State is private data managed within a component. Unlike props, state is created and managed by the component itself.
+
+### State in Function Components
+
+Function components use the `useState` Hook:
+
+```jsx
+import { useState } from 'react';
+
+function Counter() {
+  const [count, setCount] = useState(0);
+
+  return (
+    <div>
+      <p>Count: {count}</p>
+      <button onClick={() => setCount(count + 1)}>
+        Increment
+      </button>
+    </div>
+  );
+}
+```
+
+`useState` returns an array with two elements:
+1. The current state value
+2. A function to update the state
+
+```jsx
+function Form() {
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    await submitForm({ name, email });
+    setIsSubmitting(false);
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <input
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+      />
+      <input
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+      />
+      <button disabled={isSubmitting}>Submit</button>
+    </form>
+  );
+}
+```
+
+### State in Class Components
+
+Class components use `this.state` and `this.setState()`:
+
+```jsx
+import { Component } from 'react';
+
+class Counter extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { count: 0 };
+  }
+
+  increment = () => {
+    this.setState({ count: this.state.count + 1 });
+  };
+
+  render() {
+    return (
+      <div>
+        <p>Count: {this.state.count}</p>
+        <button onClick={this.increment}>
+          Increment
+        </button>
+      </div>
+    );
+  }
+}
+```
+
+### setState is Asynchronous
+
+State updates are batched for performance. Don't rely on the current state value immediately after calling `setState`:
+
+```jsx
+// ❌ This might not work as expected
+this.setState({ count: this.state.count + 1 });
+this.setState({ count: this.state.count + 1 });
+// count might only increment by 1
+
+// ✅ Use the function form for updates based on previous state
+this.setState(prevState => ({ count: prevState.count + 1 }));
+this.setState(prevState => ({ count: prevState.count + 1 }));
+// count will increment by 2
+```
+
+According to the React source code in `ReactBaseClasses.js`, `setState` accepts:
+- An object of state variables to update
+- A function that returns an object of state variables
+- An optional callback that executes after the state is updated
+
+```jsx
+// Object form
+this.setState({ count: 5 });
+
+// Function form
+this.setState((state, props) => {
+  return { count: state.count + props.increment };
+});
+
+// With callback
+this.setState({ count: 5 }, () => {
+  console.log('State updated:', this.state.count);
+});
+```
+
+<Note>
+  **From React Source**: There is no guarantee that `this.state` will be immediately updated, so accessing `this.state` after calling `setState` may return the old value. State updates may be batched together for performance.
+</Note>
+
+## State Immutability
+
+You should **never** mutate state directly. Always create new objects/arrays:
+
+```jsx
+// ❌ Don't mutate state
+function TodoList() {
+  const [todos, setTodos] = useState([]);
+  
+  const addTodo = (text) => {
+    todos.push({ id: Date.now(), text }); // Wrong!
+    setTodos(todos); // Won't trigger re-render
+  };
+}
+
+// ✅ Create a new array
+function TodoList() {
+  const [todos, setTodos] = useState([]);
+  
+  const addTodo = (text) => {
+    setTodos([...todos, { id: Date.now(), text }]);
+  };
+  
+  const removeTodo = (id) => {
+    setTodos(todos.filter(todo => todo.id !== id));
+  };
+  
+  const updateTodo = (id, newText) => {
+    setTodos(todos.map(todo => 
+      todo.id === id ? { ...todo, text: newText } : todo
+    ));
+  };
+}
+```
+
+### Why Immutability Matters
+
+1. **Detects changes easily**: React can quickly check if a new object reference is different
+2. **Determines when to re-render**: React can optimize by comparing references
+3. **Enables time-travel debugging**: You can inspect previous state snapshots
+4. **Enables concurrent features**: React can safely pause and resume work
+
+```jsx
+// ❌ Mutating objects
+const [user, setUser] = useState({ name: 'Alice', age: 25 });
+user.age = 26; // Don't do this
+setUser(user); // React won't detect the change
+
+// ✅ Creating new objects
+setUser({ ...user, age: 26 });
+
+// For nested objects
+const [user, setUser] = useState({
+  name: 'Alice',
+  address: { city: 'New York', country: 'USA' }
+});
+
+setUser({
+  ...user,
+  address: {
+    ...user.address,
+    city: 'San Francisco'
+  }
+});
+```
+
+<Tip>
+  Consider using libraries like [Immer](https://immerjs.github.io/immer/) for working with complex nested state, or better yet, flatten your state structure to avoid deep nesting.
+</Tip>
+
+## Lifting State Up
+
+When multiple components need to share the same state, move the state to their closest common ancestor:
+
+```jsx
+function TemperatureConverter() {
+  const [celsius, setCelsius] = useState('');
+  
+  const fahrenheit = celsius === '' 
+    ? '' 
+    : (celsius * 9/5) + 32;
+
+  return (
+    <div>
+      <TemperatureInput
+        scale="Celsius"
+        temperature={celsius}
+        onTemperatureChange={setCelsius}
+      />
+      <TemperatureInput
+        scale="Fahrenheit"
+        temperature={fahrenheit}
+        onTemperatureChange={(f) => setCelsius((f - 32) * 5/9)}
+      />
+    </div>
+  );
+}
+
+function TemperatureInput({ scale, temperature, onTemperatureChange }) {
+  return (
+    <fieldset>
+      <legend>Enter temperature in {scale}:</legend>
+      <input
+        value={temperature}
+        onChange={(e) => onTemperatureChange(e.target.value)}
+      />
+    </fieldset>
+  );
+}
+```
+
+## Props vs State
+
+| Props | State |
+|-------|-------|
+| Passed from parent | Managed within component |
+| Read-only | Can be updated |
+| Used for configuration | Used for interactive data |
+| Like function parameters | Like function variables |
+| Can't be changed by component | Changed via setState/useState |
+
+<Note>
+  If a value doesn't change over time or doesn't trigger re-renders, it probably shouldn't be state. Consider using a regular variable, ref, or derived value instead.
+</Note>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Lifecycle" icon="rotate" href="/concepts/lifecycle">
+    Learn about component lifecycle methods and effects
+  </Card>
+  <Card title="Hooks Overview" icon="fish" href="/concepts/hooks-overview">
+    Explore React Hooks for state and side effects
+  </Card>
+</CardGroup>

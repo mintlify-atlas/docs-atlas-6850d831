@@ -1,0 +1,487 @@
+---
+title: useRef
+description: Reference a value that's not needed for rendering
+---
+
+`useRef` is a React Hook that lets you reference a value that's not needed for rendering.
+
+```typescript
+function useRef<T>(initialValue: T): { current: T }
+```
+
+## Parameters
+
+<ParamField path="initialValue" type="T" required>
+  The value you want the ref object's `current` property to be initially. It can be a value of any type. This argument is ignored after the initial render.
+</ParamField>
+
+## Returns
+
+`useRef` returns an object with a single property:
+
+<ResponseField name="current" type="T">
+  Initially set to the `initialValue` you passed. You can later set it to something else. If you pass the ref object to React as a `ref` attribute to a JSX node, React will set its `current` property.
+  
+  On subsequent renders, `useRef` will return the same object.
+</ResponseField>
+
+<Note>
+Changing the `ref.current` property does not trigger a re-render. React is not aware of when you change it because a ref is a plain JavaScript object.
+</Note>
+
+## Usage
+
+### Referencing a value with a ref
+
+Call `useRef` at the top level of your component to declare a ref:
+
+```javascript
+import { useRef } from 'react';
+
+function Stopwatch() {
+  const intervalRef = useRef(0);
+  // intervalRef.current can be used to store any value
+  
+  function handleStart() {
+    const intervalId = setInterval(() => {
+      // Update time
+    }, 1000);
+    intervalRef.current = intervalId;
+  }
+  
+  function handleStop() {
+    clearInterval(intervalRef.current);
+  }
+  
+  return (
+    <>
+      <button onClick={handleStart}>Start</button>
+      <button onClick={handleStop}>Stop</button>
+    </>
+  );
+}
+```
+
+### Manipulating the DOM with a ref
+
+It's particularly common to use a ref to manipulate the DOM:
+
+```javascript
+import { useRef } from 'react';
+
+function Form() {
+  const inputRef = useRef(null);
+  
+  function handleClick() {
+    inputRef.current.focus();
+  }
+  
+  return (
+    <>
+      <input ref={inputRef} />
+      <button onClick={handleClick}>Focus the input</button>
+    </>
+  );
+}
+```
+
+<Tabs>
+  <Tab title="Input focus">
+    ```javascript
+    function AutoFocusInput() {
+      const inputRef = useRef(null);
+      
+      useEffect(() => {
+        inputRef.current.focus();
+      }, []);
+      
+      return <input ref={inputRef} />;
+    }
+    ```
+  </Tab>
+  <Tab title="Scroll to element">
+    ```javascript
+    function ScrollToView() {
+      const ref = useRef(null);
+      
+      function scrollToElement() {
+        ref.current.scrollIntoView({ behavior: 'smooth' });
+      }
+      
+      return (
+        <>
+          <button onClick={scrollToElement}>Scroll</button>
+          <div ref={ref}>Target element</div>
+        </>
+      );
+    }
+    ```
+  </Tab>
+  <Tab title="Video control">
+    ```javascript
+    function VideoPlayer({ src }) {
+      const videoRef = useRef(null);
+      
+      function handlePlay() {
+        videoRef.current.play();
+      }
+      
+      function handlePause() {
+        videoRef.current.pause();
+      }
+      
+      return (
+        <>
+          <video ref={videoRef} src={src} />
+          <button onClick={handlePlay}>Play</button>
+          <button onClick={handlePause}>Pause</button>
+        </>
+      );
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### Avoiding recreating the ref contents
+
+React saves the initial ref value once and ignores it on subsequent renders:
+
+```javascript
+function VideoPlayer() {
+  // ❌ new Video() is called on every render
+  const playerRef = useRef(new VideoPlayer());
+  
+  // ✅ Only called if current is null
+  const playerRef = useRef(null);
+  if (playerRef.current === null) {
+    playerRef.current = new VideoPlayer();
+  }
+  
+  // ✅ Or use a function (not called on re-renders)
+  function getPlayer() {
+    if (playerRef.current === null) {
+      playerRef.current = new VideoPlayer();
+    }
+    return playerRef.current;
+  }
+}
+```
+
+## Common Use Cases
+
+### Storing timeout/interval IDs
+
+```javascript
+function Timer() {
+  const [count, setCount] = useState(0);
+  const intervalRef = useRef(null);
+  
+  function startTimer() {
+    intervalRef.current = setInterval(() => {
+      setCount(c => c + 1);
+    }, 1000);
+  }
+  
+  function stopTimer() {
+    clearInterval(intervalRef.current);
+  }
+  
+  useEffect(() => {
+    return () => {
+      // Cleanup on unmount
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    };
+  }, []);
+  
+  return (
+    <div>
+      <p>Count: {count}</p>
+      <button onClick={startTimer}>Start</button>
+      <button onClick={stopTimer}>Stop</button>
+    </div>
+  );
+}
+```
+
+### Tracking previous value
+
+```javascript
+function usePrevious(value) {
+  const ref = useRef();
+  
+  useEffect(() => {
+    ref.current = value;
+  }, [value]);
+  
+  return ref.current;
+}
+
+function Counter() {
+  const [count, setCount] = useState(0);
+  const prevCount = usePrevious(count);
+  
+  return (
+    <div>
+      <p>Current: {count}</p>
+      <p>Previous: {prevCount}</p>
+      <button onClick={() => setCount(count + 1)}>Increment</button>
+    </div>
+  );
+}
+```
+
+### Storing mutable values
+
+```javascript
+function Form() {
+  const [email, setEmail] = useState('');
+  const didMount = useRef(false);
+  
+  useEffect(() => {
+    if (!didMount.current) {
+      didMount.current = true;
+      return; // Skip first render
+    }
+    
+    // This runs on updates but not on mount
+    validateEmail(email);
+  }, [email]);
+  
+  return <input value={email} onChange={e => setEmail(e.target.value)} />;
+}
+```
+
+### Measuring DOM elements
+
+```javascript
+function MeasureElement() {
+  const ref = useRef(null);
+  const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
+  
+  useEffect(() => {
+    if (ref.current) {
+      const { width, height } = ref.current.getBoundingClientRect();
+      setDimensions({ width, height });
+    }
+  }, []);
+  
+  return (
+    <div ref={ref}>
+      Width: {dimensions.width}, Height: {dimensions.height}
+    </div>
+  );
+}
+```
+
+### Accessing latest props in callbacks
+
+```javascript
+function Chat({ onMessage }) {
+  const [messages, setMessages] = useState([]);
+  const onMessageRef = useRef(onMessage);
+  
+  // Keep ref in sync with latest callback
+  useEffect(() => {
+    onMessageRef.current = onMessage;
+  }, [onMessage]);
+  
+  useEffect(() => {
+    const connection = createConnection();
+    connection.on('message', (msg) => {
+      // Always uses latest onMessage
+      onMessageRef.current(msg);
+    });
+    return () => connection.disconnect();
+  }, []); // Empty deps - connection never recreated
+  
+  return <div>{/* ... */}</div>;
+}
+```
+
+## TypeScript
+
+```typescript
+import { useRef } from 'react';
+
+// DOM element refs
+const inputRef = useRef<HTMLInputElement>(null);
+const divRef = useRef<HTMLDivElement>(null);
+const videoRef = useRef<HTMLVideoElement>(null);
+
+// Check if current exists before using
+function focusInput() {
+  if (inputRef.current) {
+    inputRef.current.focus();
+  }
+}
+
+// Or use non-null assertion if you know it's defined
+function focusInput() {
+  inputRef.current!.focus();
+}
+
+// Mutable value refs
+const countRef = useRef<number>(0);
+const timerRef = useRef<number | null>(null);
+
+interface Player {
+  play(): void;
+  pause(): void;
+}
+
+const playerRef = useRef<Player | null>(null);
+```
+
+### Ref with initial value
+
+```typescript
+// Ref that's never null
+const idRef = useRef<number>(1);
+idRef.current = 2; // OK
+
+// Ref that can be null
+const elementRef = useRef<HTMLDivElement | null>(null);
+```
+
+### Custom ref types
+
+```typescript
+interface CustomInput {
+  focus: () => void;
+  reset: () => void;
+}
+
+const customRef = useRef<CustomInput>(null);
+
+// Usage
+if (customRef.current) {
+  customRef.current.focus();
+  customRef.current.reset();
+}
+```
+
+## Troubleshooting
+
+### I can't get a ref to a custom component
+
+By default, you can't pass refs to custom components:
+
+```javascript
+function MyInput() {
+  return <input />;
+}
+
+// ❌ This doesn't work
+function Parent() {
+  const ref = useRef(null);
+  return <MyInput ref={ref} />; // Error!
+}
+```
+
+Use `forwardRef` to enable refs:
+
+```javascript
+import { forwardRef } from 'react';
+
+const MyInput = forwardRef(function MyInput(props, ref) {
+  return <input ref={ref} />;
+});
+
+// ✅ Now this works
+function Parent() {
+  const ref = useRef(null);
+  return <MyInput ref={ref} />;
+}
+```
+
+### My ref.current is null
+
+This happens before the component mounts:
+
+```javascript
+function Component() {
+  const ref = useRef(null);
+  
+  // ❌ ref.current is null here during first render
+  console.log(ref.current); // null
+  
+  useEffect(() => {
+    // ✅ ref.current is set after mount
+    console.log(ref.current); // <div>...</div>
+  }, []);
+  
+  return <div ref={ref}>Content</div>;
+}
+```
+
+### Changing ref.current doesn't re-render
+
+This is expected behavior. If you need re-renders, use `useState` instead:
+
+```javascript
+// ❌ Won't re-render when ref changes
+function Component() {
+  const ref = useRef(0);
+  
+  function handleClick() {
+    ref.current += 1;
+    // Component doesn't re-render!
+  }
+}
+
+// ✅ Will re-render when state changes
+function Component() {
+  const [count, setCount] = useState(0);
+  
+  function handleClick() {
+    setCount(count + 1);
+    // Component re-renders
+  }
+}
+```
+
+### Should I use ref or state?
+
+Use `useState` when:
+- The value is displayed in the UI
+- Changes should trigger re-renders
+- You need React to "react" to changes
+
+Use `useRef` when:
+- Storing values that don't affect rendering
+- Accessing DOM elements
+- Keeping mutable values across renders
+- Storing timeout/interval IDs
+
+## ref vs state
+
+| Feature | ref | state |
+|---------|-----|-------|
+| Triggers re-render | No | Yes |
+| Mutable | Yes (mutate .current directly) | No (use setter function) |
+| Value during render | Current value | Value at render time |
+| Use case | Side effects, DOM access | UI data |
+
+```javascript
+function Example() {
+  // State: Affects rendering
+  const [count, setCount] = useState(0);
+  
+  // Ref: Doesn't affect rendering
+  const renderCount = useRef(0);
+  
+  useEffect(() => {
+    renderCount.current += 1;
+  });
+  
+  return (
+    <div>
+      <p>Count: {count}</p>
+      <p>Renders: {renderCount.current}</p>
+      <button onClick={() => setCount(count + 1)}>Increment</button>
+    </div>
+  );
+}
+```

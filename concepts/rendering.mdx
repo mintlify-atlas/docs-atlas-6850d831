@@ -1,0 +1,503 @@
+---
+title: Rendering
+description: Understanding how React renders components and updates the DOM
+icon: paintbrush
+---
+
+Rendering is the process of React calling your components to figure out what should be displayed on the screen. Understanding how React renders helps you write more performant applications and debug rendering issues.
+
+## The Rendering Process
+
+When you render a React application, three things happen:
+
+1. **Triggering a render**: Something causes React to render
+2. **Rendering the component**: React calls your component functions
+3. **Committing to the DOM**: React updates the actual DOM
+
+## Triggering a Render
+
+There are two reasons for a component to render:
+
+### Initial Render
+
+When your app starts, React needs to display the initial UI:
+
+```jsx
+import { createRoot } from 'react-dom/client';
+import App from './App';
+
+const root = createRoot(document.getElementById('root'));
+root.render(<App />);
+```
+
+### Re-renders (State Updates)
+
+Once the component has been initially rendered, you can trigger additional renders by updating state:
+
+```jsx
+import { useState } from 'react';
+
+function Counter() {
+  const [count, setCount] = useState(0);
+  
+  return (
+    <button onClick={() => setCount(count + 1)}>
+      Count: {count}
+    </button>
+  );
+}
+```
+
+When you call `setCount`:
+1. React schedules a re-render
+2. React calls your component function again
+3. React updates the DOM if needed
+
+<Note>
+  Updating a component's state automatically queues a render. You can think of this like a restaurant guest ordering tea, dessert, and all sorts of things after putting in their first order, depending on the state of their thirst or hunger.
+</Note>
+
+## The Render Phase
+
+During rendering, React calls your component to figure out what should be on screen.
+
+### Initial Render
+
+On initial render, React calls the root component:
+
+```jsx
+function App() {
+  return (
+    <div>
+      <Header />
+      <Main />
+      <Footer />
+    </div>
+  );
+}
+```
+
+React will:
+1. Call `App()`
+2. Call `Header()`, `Main()`, and `Footer()`
+3. Call any nested components
+4. Continue recursively until there are no more nested components
+
+### Re-renders
+
+On subsequent renders, React calls the component whose state update triggered the render:
+
+```jsx
+function App() {
+  const [count, setCount] = useState(0);
+  
+  return (
+    <div>
+      <Header />
+      <Counter count={count} onIncrement={() => setCount(count + 1)} />
+      <Footer />
+    </div>
+  );
+}
+```
+
+When `setCount` is called:
+1. React re-renders `App`
+2. React re-renders `Counter` (it receives new props)
+3. React may skip `Header` and `Footer` if their props haven't changed
+
+## React Elements and the Virtual DOM
+
+When you write JSX, it creates React elements - lightweight descriptions of what to render:
+
+```jsx
+// This JSX
+const element = <h1 className="greeting">Hello, world!</h1>;
+
+// Creates this React element (simplified)
+const element = {
+  type: 'h1',
+  props: {
+    className: 'greeting',
+    children: 'Hello, world!'
+  }
+};
+```
+
+<Tip>
+  React elements are **immutable**. According to React's source code in `ReactJSXElement.js`, once you create an element, you can't change its children or attributes. An element is like a single frame in a movie: it represents the UI at a certain point in time.
+</Tip>
+
+The collection of all React elements forms a tree structure, often called the "virtual DOM" (though React doesn't officially use this term):
+
+```jsx
+<App>
+  <Header>
+    <Logo />
+    <Nav>
+      <NavItem />
+      <NavItem />
+    </Nav>
+  </Header>
+  <Main>
+    <Article />
+    <Sidebar />
+  </Main>
+</App>
+```
+
+## Reconciliation: Comparing Renders
+
+After rendering your components, React needs to figure out what changed. This process is called **reconciliation**.
+
+React compares the new element tree with the previous one:
+
+```jsx
+function Counter() {
+  const [count, setCount] = useState(0);
+  
+  return (
+    <div>
+      <h1>Count: {count}</h1>
+      <button onClick={() => setCount(count + 1)}>
+        Increment
+      </button>
+    </div>
+  );
+}
+```
+
+When count changes from 0 to 1:
+- React compares the new tree with the old tree
+- It finds that only the text content of `<h1>` changed
+- It marks only that text node for update
+- The `div`, `h1` element, and `button` don't need to change
+
+### Reconciliation Rules
+
+#### Different Types: Replace the Tree
+
+When elements have different types, React replaces the entire tree:
+
+```jsx
+// Before
+<div>
+  <Counter />
+</div>
+
+// After
+<span>
+  <Counter />
+</span>
+```
+
+React will:
+1. Unmount the old `<div>` and its children
+2. Destroy old `Counter` component state
+3. Mount the new `<span>` and its children
+4. Create new `Counter` component with fresh state
+
+#### Same Type: Update Props
+
+When elements have the same type, React updates the props:
+
+```jsx
+// Before
+<div className="before" title="old" />
+
+// After
+<div className="after" title="new" />
+```
+
+React will:
+1. Keep the same DOM node
+2. Update only the changed attributes
+
+#### Keys: Identifying Elements
+
+When rendering lists, React uses keys to match children:
+
+```jsx
+// Without keys (inefficient)
+<ul>
+  <li>First</li>
+  <li>Second</li>
+</ul>
+
+// Add item at the beginning
+<ul>
+  <li>Zero</li>  {/* React thinks this is "First" changed */}
+  <li>First</li>  {/* React thinks this is "Second" changed */}
+  <li>Second</li> {/* React thinks this is new */}
+</ul>
+```
+
+```jsx
+// With keys (efficient)
+<ul>
+  <li key="first">First</li>
+  <li key="second">Second</li>
+</ul>
+
+// Add item at the beginning
+<ul>
+  <li key="zero">Zero</li>    {/* React knows this is new */}
+  <li key="first">First</li>  {/* React knows this stayed the same */}
+  <li key="second">Second</li> {/* React knows this stayed the same */}
+</ul>
+```
+
+<Warning>
+  **Never use array indexes as keys** if the list can be reordered, filtered, or have items added/removed. This can cause serious bugs and performance issues.
+  
+  ```jsx
+  // ❌ Bad: using index as key
+  items.map((item, index) => <li key={index}>{item}</li>)
+  
+  // ✅ Good: using stable ID
+  items.map(item => <li key={item.id}>{item.text}</li>)
+  ```
+</Warning>
+
+## The Commit Phase
+
+After reconciliation, React knows which DOM nodes need to be added, updated, or removed. This is the **commit phase**.
+
+### Committing Changes
+
+React applies the minimal set of changes to the DOM:
+
+```jsx
+function Message({ text }) {
+  return (
+    <div className="message">
+      <p>{text}</p>
+      <button>Dismiss</button>
+    </div>
+  );
+}
+```
+
+When `text` changes from "Hello" to "Hi":
+1. React doesn't touch the DOM structure
+2. React only updates the text content of the `<p>` node
+3. This is much faster than recreating the DOM
+
+### Browser Paint
+
+After React commits changes to the DOM, the browser repaints the screen:
+
+1. **Render phase**: React calculates changes (can be interrupted)
+2. **Commit phase**: React applies changes to DOM (synchronous, cannot be interrupted)
+3. **Browser paint**: Browser updates the screen
+
+<Note>
+  In React, "rendering" refers to React calling your component, not the browser painting pixels. The browser paint happens after React's commit phase.
+</Note>
+
+## Render and Commit Phases
+
+The distinction between render and commit phases is important:
+
+<Tabs>
+  <Tab title="Render Phase">
+    **Characteristics:**
+    - Pure computation
+    - Can be interrupted
+    - Can be run multiple times
+    - No side effects
+    - No DOM mutations
+    
+    **What happens:**
+    - React calls component functions
+    - Calculates what changed
+    - Builds element tree
+    
+    **Can use:**
+    - `useState`
+    - `useMemo`
+    - `useReducer`
+    - Render logic
+  </Tab>
+  
+  <Tab title="Commit Phase">
+    **Characteristics:**
+    - Synchronous
+    - Cannot be interrupted
+    - Runs once per render
+    - Can have side effects
+    - Mutates the DOM
+    
+    **What happens:**
+    - React updates the DOM
+    - Calls `useLayoutEffect`
+    - Browser paints
+    - Calls `useEffect`
+    
+    **Can use:**
+    - `useEffect`
+    - `useLayoutEffect`
+    - Refs
+    - DOM APIs
+  </Tab>
+</Tabs>
+
+## Optimizing Renders
+
+### Prevent Unnecessary Re-renders
+
+React re-renders a component when:
+1. Its state changes
+2. Its parent re-renders
+3. Its context value changes
+
+You can prevent unnecessary re-renders:
+
+```jsx
+import { memo } from 'react';
+
+// Without memo: re-renders whenever parent re-renders
+function ExpensiveChild({ data }) {
+  return <div>{expensiveCalculation(data)}</div>;
+}
+
+// With memo: only re-renders if props change
+const ExpensiveChild = memo(function ExpensiveChild({ data }) {
+  return <div>{expensiveCalculation(data)}</div>;
+});
+```
+
+### Batching State Updates
+
+React automatically batches multiple state updates:
+
+```jsx
+function handleClick() {
+  setCount(count + 1);    // Doesn't re-render yet
+  setFlag(true);          // Doesn't re-render yet
+  setItems([...items]);   // Doesn't re-render yet
+  // React batches these and re-renders once
+}
+```
+
+In React 18+, batching also works in promises, setTimeout, and event handlers:
+
+```jsx
+setTimeout(() => {
+  setCount(count + 1);  // Batched
+  setFlag(true);        // Batched
+}, 1000);
+
+fetch('/api/data').then(() => {
+  setData(result);      // Batched
+  setLoading(false);    // Batched
+});
+```
+
+### Key Placement
+
+You can use keys to reset component state:
+
+```jsx
+function ProfilePage({ userId }) {
+  // This Profile component will unmount and remount
+  // with fresh state when userId changes
+  return <Profile key={userId} userId={userId} />;
+}
+```
+
+## Concurrent Rendering
+
+React 18 introduced concurrent rendering, which allows React to work on multiple state updates simultaneously and prioritize urgent updates:
+
+```jsx
+import { useTransition } from 'react';
+
+function SearchPage() {
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState([]);
+  const [isPending, startTransition] = useTransition();
+  
+  function handleChange(e) {
+    // Urgent: update input immediately
+    setQuery(e.target.value);
+    
+    // Non-urgent: can be interrupted
+    startTransition(() => {
+      setResults(searchData(e.target.value));
+    });
+  }
+  
+  return (
+    <>
+      <input value={query} onChange={handleChange} />
+      {isPending && <Spinner />}
+      <SearchResults results={results} />
+    </>
+  );
+}
+```
+
+## Debugging Renders
+
+### React DevTools
+
+Use React DevTools to:
+- Highlight components when they render
+- See why a component rendered
+- Profile rendering performance
+
+### Console Logging
+
+```jsx
+function Component({ value }) {
+  console.log('Rendering Component with value:', value);
+  return <div>{value}</div>;
+}
+```
+
+### useEffect Dependencies
+
+Missing dependencies cause extra renders:
+
+```jsx
+// ❌ Missing dependency causes stale closure
+useEffect(() => {
+  setInterval(() => {
+    console.log(count); // Always logs 0
+  }, 1000);
+}, []); // Missing 'count'
+
+// ✅ Include all dependencies
+useEffect(() => {
+  const id = setInterval(() => {
+    console.log(count); // Logs current count
+  }, 1000);
+  return () => clearInterval(id);
+}, [count]);
+```
+
+<Tip>
+  If you're experiencing performance issues, use React DevTools Profiler to identify slow components before optimizing. Premature optimization can make code more complex without meaningful performance gains.
+</Tip>
+
+## Summary
+
+1. **Rendering** = React calling your component functions
+2. **Reconciliation** = React comparing old and new element trees
+3. **Committing** = React updating the DOM
+4. React elements are immutable snapshots of the UI
+5. Keys help React identify elements across renders
+6. The render phase is pure; the commit phase can have side effects
+7. React batches updates and optimizes DOM changes
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Components" icon="cube" href="/concepts/components">
+    Learn about component types and composition
+  </Card>
+  <Card title="Hooks Overview" icon="fish" href="/concepts/hooks-overview">
+    Explore all React Hooks
+  </Card>
+</CardGroup>

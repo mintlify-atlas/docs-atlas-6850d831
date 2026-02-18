@@ -1,80 +1,573 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quickstart
+description: Build your first React application in 5 minutes with this hands-on tutorial
 ---
 
-## Get started in three steps
+# React Quickstart
 
-Get your documentation site running locally and make your first customization.
+This quickstart guide will help you build your first React application in just 5 minutes. You'll learn the fundamentals of React by creating an interactive counter component with state management.
 
-### Step 1: Set up your local environment
+<Tip>
+This tutorial assumes you have Node.js installed and are familiar with basic JavaScript. If you need to install React first, check out the [Installation Guide](/installation).
+</Tip>
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
+## What You'll Build
+
+You'll create an interactive counter application that demonstrates:
+- Component creation
+- State management with hooks
+- Event handling
+- JSX syntax
+- Component composition
+
+## Quick Setup
+
+<Steps>
+  <Step title="Create a new React project">
+    Use Vite to quickly scaffold a new React project:
     
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
+    ```bash
+    npm create vite@latest react-quickstart -- --template react
+    cd react-quickstart
+    npm install
+    ```
     
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+    This creates a new React project with all the necessary configuration.
+  </Step>
 
-### Step 2: Deploy your changes
-
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
+  <Step title="Start the development server">
+    Launch the development server to see your app:
     
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+    ```bash
+    npm run dev
+    ```
+    
+    Open your browser to `http://localhost:5173`. You should see the default Vite + React welcome page.
+  </Step>
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+  <Step title="Open your code editor">
+    Open the project in your favorite code editor:
+    
+    ```bash
+    code .
+    ```
+    
+    You'll be working primarily in the `src` directory.
+  </Step>
+</Steps>
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+## Building Your First Component
 
-### Step 3: Go live
+Let's build a counter component that increments when you click a button. This example uses React's `useState` hook, which is the fundamental way to manage state in function components.
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+<Steps>
+  <Step title="Import React hooks">
+    Open `src/App.jsx` and start by importing the `useState` hook from React:
+    
+    ```jsx
+    import { useState } from 'react';
+    ```
+    
+    The `useState` hook is one of React's most important features. It lets your components "remember" information between renders.
+  </Step>
 
-## Next steps
+  <Step title="Create your counter component">
+    Replace the contents of `src/App.jsx` with this code:
+    
+    ```jsx
+    import { useState } from 'react';
 
-Now that you have your docs running, explore these key features:
+    function App() {
+      // Declare a state variable called "count" with initial value 0
+      const [count, setCount] = useState(0);
+
+      return (
+        <div style={{ padding: '20px', fontFamily: 'sans-serif' }}>
+          <h1>My First React App</h1>
+          <p>You clicked {count} times</p>
+          <button onClick={() => setCount(count + 1)}>
+            Click me
+          </button>
+        </div>
+      );
+    }
+
+    export default App;
+    ```
+    
+    Save the file and watch your browser automatically update with the new component!
+  </Step>
+
+  <Step title="Test your counter">
+    Click the button in your browser. The count should increment with each click!
+    
+    <Note>
+    Notice how the component re-renders automatically when state changes. This is React's declarative magic - you just update the state, and React handles updating the UI.
+    </Note>
+  </Step>
+</Steps>
+
+## Understanding the Code
+
+Let's break down what's happening in your counter component:
+
+### State Declaration
+
+```jsx
+const [count, setCount] = useState(0);
+```
+
+This line does several things:
+- `useState(0)` creates a state variable initialized to `0`
+- `count` is the current state value
+- `setCount` is the function you call to update the state
+- When you call `setCount`, React re-renders your component with the new value
+
+### JSX Syntax
+
+```jsx
+return (
+  <div style={{ padding: '20px', fontFamily: 'sans-serif' }}>
+    <h1>My First React App</h1>
+    <p>You clicked {count} times</p>
+    <button onClick={() => setCount(count + 1)}>
+      Click me
+    </button>
+  </div>
+);
+```
+
+This HTML-like syntax is called JSX. It lets you write markup directly in JavaScript. Key points:
+- Use curly braces `{}` to embed JavaScript expressions
+- Use `onClick` (camelCase) instead of `onclick`
+- You can use JavaScript expressions inside JSX like `{count}`
+
+### Event Handling
+
+```jsx
+onClick={() => setCount(count + 1)}
+```
+
+This creates an event handler that:
+- Listens for click events on the button
+- Calls `setCount` with the new count value
+- Triggers a re-render with the updated state
+
+## Adding More Functionality
+
+Let's enhance your counter with additional features:
+
+<Steps>
+  <Step title="Add increment and decrement buttons">
+    Update your component to include more controls:
+    
+    ```jsx
+    import { useState } from 'react';
+
+    function App() {
+      const [count, setCount] = useState(0);
+
+      return (
+        <div style={{ 
+          padding: '40px', 
+          fontFamily: 'sans-serif',
+          textAlign: 'center',
+          maxWidth: '400px',
+          margin: '0 auto'
+        }}>
+          <h1>Counter App</h1>
+          <div style={{ 
+            fontSize: '48px', 
+            margin: '20px 0',
+            color: count >= 0 ? 'green' : 'red'
+          }}>
+            {count}
+          </div>
+          <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+            <button onClick={() => setCount(count - 1)}>
+              Decrement
+            </button>
+            <button onClick={() => setCount(0)}>
+              Reset
+            </button>
+            <button onClick={() => setCount(count + 1)}>
+              Increment
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    export default App;
+    ```
+    
+    Now you have three buttons: decrement, reset, and increment!
+  </Step>
+
+  <Step title="Add step size control">
+    Let's add another state variable to control the increment/decrement step:
+    
+    ```jsx
+    import { useState } from 'react';
+
+    function App() {
+      const [count, setCount] = useState(0);
+      const [step, setStep] = useState(1);
+
+      return (
+        <div style={{ 
+          padding: '40px', 
+          fontFamily: 'sans-serif',
+          textAlign: 'center',
+          maxWidth: '400px',
+          margin: '0 auto'
+        }}>
+          <h1>Counter App</h1>
+          
+          <div style={{ 
+            fontSize: '48px', 
+            margin: '20px 0',
+            color: count >= 0 ? 'green' : 'red'
+          }}>
+            {count}
+          </div>
+
+          <div style={{ marginBottom: '20px' }}>
+            <label>
+              Step size: 
+              <input 
+                type="number" 
+                value={step} 
+                onChange={(e) => setStep(Number(e.target.value))}
+                style={{ marginLeft: '10px', padding: '5px', width: '60px' }}
+              />
+            </label>
+          </div>
+
+          <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+            <button onClick={() => setCount(count - step)}>
+              -{step}
+            </button>
+            <button onClick={() => setCount(0)}>
+              Reset
+            </button>
+            <button onClick={() => setCount(count + step)}>
+              +{step}
+            </button>
+          </div>
+
+          <p style={{ marginTop: '20px', color: '#666' }}>
+            Total clicks: {Math.abs(count)}
+          </p>
+        </div>
+      );
+    }
+
+    export default App;
+    ```
+    
+    Now you can control how much the counter increments or decrements!
+  </Step>
+
+  <Step title="Create reusable components">
+    Split your app into smaller, reusable components. Create a new file `src/Counter.jsx`:
+    
+    ```jsx
+    import { useState } from 'react';
+
+    function Counter({ initialValue = 0, label = "Counter" }) {
+      const [count, setCount] = useState(initialValue);
+
+      return (
+        <div style={{ 
+          padding: '20px',
+          border: '2px solid #ddd',
+          borderRadius: '8px',
+          margin: '10px'
+        }}>
+          <h3>{label}</h3>
+          <div style={{ fontSize: '32px', margin: '10px 0' }}>
+            {count}
+          </div>
+          <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+            <button onClick={() => setCount(count - 1)}>-</button>
+            <button onClick={() => setCount(initialValue)}>Reset</button>
+            <button onClick={() => setCount(count + 1)}>+</button>
+          </div>
+        </div>
+      );
+    }
+
+    export default Counter;
+    ```
+    
+    Now update `src/App.jsx` to use multiple counters:
+    
+    ```jsx
+    import Counter from './Counter';
+
+    function App() {
+      return (
+        <div style={{ 
+          padding: '40px',
+          fontFamily: 'sans-serif',
+          textAlign: 'center'
+        }}>
+          <h1>Multiple Counters</h1>
+          <div style={{ 
+            display: 'flex', 
+            flexWrap: 'wrap',
+            justifyContent: 'center',
+            gap: '20px'
+          }}>
+            <Counter label="Clicks" initialValue={0} />
+            <Counter label="Score" initialValue={100} />
+            <Counter label="Lives" initialValue={3} />
+          </div>
+        </div>
+      );
+    }
+
+    export default App;
+    ```
+    
+    You now have three independent counters, each maintaining their own state!
+  </Step>
+</Steps>
+
+## Key React Concepts You've Learned
+
+### Components
+
+Components are the building blocks of React applications. They're JavaScript functions that return JSX:
+
+```jsx
+function Welcome({ name }) {
+  return <h1>Hello, {name}!</h1>;
+}
+```
+
+### Props
+
+Props are how you pass data to components:
+
+```jsx
+<Counter label="Score" initialValue={100} />
+```
+
+Inside the component, access props as function parameters:
+
+```jsx
+function Counter({ label, initialValue }) {
+  // Use label and initialValue
+}
+```
+
+### State with useState
+
+The `useState` hook lets components remember values:
+
+```jsx
+const [count, setCount] = useState(0);
+// count: current value
+// setCount: function to update it
+// 0: initial value
+```
+
+### Event Handling
+
+React uses camelCase event names and passes functions as handlers:
+
+```jsx
+<button onClick={() => setCount(count + 1)}>
+  Increment
+</button>
+```
+
+### JSX Expressions
+
+Embed JavaScript in JSX using curly braces:
+
+```jsx
+<p>You clicked {count} times</p>
+<div style={{ color: count > 10 ? 'red' : 'green' }}>
+  {count}
+</div>
+```
+
+## Common Patterns
+
+### Conditional Rendering
+
+Show different UI based on state:
+
+```jsx
+function App() {
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  return (
+    <div>
+      {isLoggedIn ? (
+        <h1>Welcome back!</h1>
+      ) : (
+        <button onClick={() => setIsLoggedIn(true)}>
+          Log In
+        </button>
+      )}
+    </div>
+  );
+}
+```
+
+### Lists and Keys
+
+Render lists of items:
+
+```jsx
+function TodoList() {
+  const [todos, setTodos] = useState(['Learn React', 'Build an app']);
+
+  return (
+    <ul>
+      {todos.map((todo, index) => (
+        <li key={index}>{todo}</li>
+      ))}
+    </ul>
+  );
+}
+```
+
+### Form Inputs
+
+Handle form input with controlled components:
+
+```jsx
+function SearchBox() {
+  const [query, setQuery] = useState('');
+
+  return (
+    <input
+      type="text"
+      value={query}
+      onChange={(e) => setQuery(e.target.value)}
+      placeholder="Search..."
+    />
+  );
+}
+```
+
+## Using React Hooks from the Source
+
+React provides many built-in hooks. Here are some of the most commonly used ones from the actual React source code:
+
+```jsx
+import {
+  useState,      // Manage component state
+  useEffect,     // Perform side effects
+  useContext,    // Access context values
+  useReducer,    // Manage complex state logic
+  useCallback,   // Memoize functions
+  useMemo,       // Memoize computed values
+  useRef,        // Access DOM elements or persist values
+  useId          // Generate unique IDs
+} from 'react';
+```
+
+### Using useEffect for Side Effects
+
+```jsx
+import { useState, useEffect } from 'react';
+
+function Timer() {
+  const [seconds, setSeconds] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setSeconds(s => s + 1);
+    }, 1000);
+
+    // Cleanup function
+    return () => clearInterval(interval);
+  }, []); // Empty array means run once on mount
+
+  return <div>Seconds: {seconds}</div>;
+}
+```
+
+### Using useRef to Access DOM Elements
+
+```jsx
+import { useRef } from 'react';
+
+function TextInputWithFocusButton() {
+  const inputRef = useRef(null);
+
+  return (
+    <>
+      <input ref={inputRef} type="text" />
+      <button onClick={() => inputRef.current.focus()}>
+        Focus the input
+      </button>
+    </>
+  );
+}
+```
+
+## Next Steps
+
+Congratulations! You've built your first React application and learned the fundamentals. Here's what to explore next:
 
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="Learn Key Concepts" icon="book" href="/concepts">
+    Dive deeper into components, props, state, and lifecycle
+  </Card>
+  
+  <Card title="Explore Hooks" icon="hook" href="/api-reference/hooks">
+    Master useState, useEffect, useContext, and more
+  </Card>
+  
+  <Card title="Build a Real App" icon="rocket" href="/tutorials">
+    Follow step-by-step tutorials to build complete applications
+  </Card>
+  
+  <Card title="API Reference" icon="code" href="/api-reference">
+    Explore the complete React API documentation
+  </Card>
 </CardGroup>
 
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>
+## Tips for Success
+
+<Tip>
+**Start small** - Don't try to learn everything at once. Master useState and basic components first, then gradually explore more advanced features.
+</Tip>
+
+<Tip>
+**Practice daily** - Build small projects regularly. Even 30 minutes a day will help solidify your understanding.
+</Tip>
+
+<Tip>
+**Use React DevTools** - Install the React Developer Tools browser extension to inspect your components and debug issues.
+</Tip>
+
+<Tip>
+**Read error messages** - React provides helpful error messages. Read them carefully - they often tell you exactly what's wrong.
+</Tip>
+
+## Troubleshooting
+
+**Component not updating?** - Make sure you're using `setState` to update state, not modifying it directly.
+
+**Infinite re-renders?** - Check that you're not calling state setters directly in the render body. Use event handlers or useEffect instead.
+
+**Props not working?** - Verify you're passing and receiving props with the correct names. Remember that props are immutable.
+
+**Hooks error?** - Hooks must be called at the top level of your component, not inside loops, conditions, or nested functions.
+
+## Additional Resources
+
+- [React Documentation](https://react.dev/) - Official React documentation
+- [React DevTools](https://react.dev/learn/react-developer-tools) - Browser extension for debugging
+- [Create React App](https://create-react-app.dev/) - Official React starter toolkit
+- [Vite](https://vitejs.dev/) - Fast build tool with excellent React support
+
+Now you're ready to build amazing React applications. Happy coding!

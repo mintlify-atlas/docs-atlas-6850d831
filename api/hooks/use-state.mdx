@@ -1,0 +1,367 @@
+---
+title: useState
+description: Declare a state variable that React will preserve between re-renders
+---
+
+`useState` is a React Hook that lets you add a state variable to your component.
+
+```typescript
+function useState<S>(
+  initialState: (() => S) | S
+): [S, Dispatch<BasicStateAction<S>>]
+```
+
+## Parameters
+
+<ParamField path="initialState" type="S | (() => S)" required>
+  The initial value of the state. It can be a value of any type, but there is special behavior for functions.
+  
+  - If you pass a function as `initialState`, it will be treated as an **initializer function**. It should be pure, take no arguments, and return a value of any type. React will call your initializer function when initializing the component, and store its return value as the initial state.
+  
+  This parameter is ignored after the initial render.
+</ParamField>
+
+## Returns
+
+`useState` returns an array with exactly two values:
+
+<ResponseField name="[0]" type="S">
+  The current state. During the first render, it will match the `initialState` you passed.
+</ResponseField>
+
+<ResponseField name="[1]" type="Dispatch<BasicStateAction<S>>">
+  The `set` function that lets you update the state to a different value and trigger a re-render.
+  
+  The set function accepts either:
+  - A new state value directly: `setState(newValue)`
+  - An updater function: `setState(prev => prev + 1)`
+  
+  The set function has no return value.
+</ResponseField>
+
+## Usage
+
+### Adding state to a component
+
+Call `useState` at the top level of your component to declare a state variable:
+
+```javascript
+import { useState } from 'react';
+
+function Counter() {
+  const [count, setCount] = useState(0);
+  
+  return (
+    <div>
+      <p>Count: {count}</p>
+      <button onClick={() => setCount(count + 1)}>
+        Increment
+      </button>
+    </div>
+  );
+}
+```
+
+### Updating state based on previous state
+
+When the new state is calculated from the previous state, pass an updater function:
+
+```javascript
+function Counter() {
+  const [count, setCount] = useState(0);
+  
+  function handleClick() {
+    // ✅ Correct: Using updater function
+    setCount(c => c + 1);
+    setCount(c => c + 1);
+    setCount(c => c + 1);
+    // Will increment by 3
+  }
+  
+  return <button onClick={handleClick}>+3</button>;
+}
+```
+
+<Warning>
+Without an updater function, multiple state updates in the same event handler might not work as expected:
+
+```javascript
+function handleClick() {
+  // ❌ Incorrect: Using current value
+  setCount(count + 1);
+  setCount(count + 1);
+  setCount(count + 1);
+  // Will only increment by 1!
+}
+```
+
+This happens because `count` doesn't change until the next render, so each `setCount(count + 1)` call becomes `setCount(1)`.
+</Warning>
+
+### Updating objects and arrays in state
+
+You must create new objects/arrays rather than mutating existing ones:
+
+<Tabs>
+  <Tab title="Objects">
+    ```javascript
+    const [person, setPerson] = useState({
+      name: 'Alice',
+      age: 30
+    });
+    
+    function updateAge() {
+      // ✅ Create new object
+      setPerson({
+        ...person,
+        age: person.age + 1
+      });
+      
+      // ❌ Don't mutate
+      // person.age = person.age + 1;
+      // setPerson(person);
+    }
+    ```
+  </Tab>
+  <Tab title="Arrays">
+    ```javascript
+    const [items, setItems] = useState([]);
+    
+    function addItem(item) {
+      // ✅ Create new array
+      setItems([...items, item]);
+      
+      // ❌ Don't mutate
+      // items.push(item);
+      // setItems(items);
+    }
+    
+    function removeItem(index) {
+      // ✅ Create new array without item
+      setItems(items.filter((_, i) => i !== index));
+    }
+    ```
+  </Tab>
+  <Tab title="Nested Objects">
+    ```javascript
+    const [user, setUser] = useState({
+      name: 'Alice',
+      address: {
+        city: 'Seattle',
+        zip: '98101'
+      }
+    });
+    
+    function updateCity(newCity) {
+      // ✅ Create new nested objects
+      setUser({
+        ...user,
+        address: {
+          ...user.address,
+          city: newCity
+        }
+      });
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### Using the initializer function
+
+If the initial state is expensive to compute, pass a function:
+
+```javascript
+function TodoList() {
+  // ✅ Initializer function runs only once
+  const [todos, setTodos] = useState(() => {
+    return loadTodosFromStorage();
+  });
+  
+  // ❌ Expensive function runs on every render
+  const [todos2, setTodos2] = useState(loadTodosFromStorage());
+}
+```
+
+<Note>
+React only calls the initializer function during initialization. The function's return value is stored as the initial state and isn't called on subsequent renders.
+</Note>
+
+### Resetting state with a key
+
+You can reset a component's state by changing its `key`:
+
+```javascript
+function App() {
+  const [version, setVersion] = useState(0);
+  
+  function reset() {
+    setVersion(version + 1);
+  }
+  
+  return (
+    <>
+      <button onClick={reset}>Reset</button>
+      <Form key={version} />
+    </>
+  );
+}
+
+function Form() {
+  const [name, setName] = useState('');
+  // State will reset when key changes
+  return <input value={name} onChange={e => setName(e.target.value)} />;
+}
+```
+
+## TypeScript
+
+### Basic types
+
+```typescript
+// Type is inferred from initial value
+const [count, setCount] = useState(0); // number
+const [name, setName] = useState(''); // string
+const [enabled, setEnabled] = useState(true); // boolean
+
+// Explicitly specify type
+const [count, setCount] = useState<number>(0);
+const [name, setName] = useState<string>('');
+```
+
+### Nullable types
+
+```typescript
+interface User {
+  id: string;
+  name: string;
+}
+
+// Allow null initially
+const [user, setUser] = useState<User | null>(null);
+
+if (user !== null) {
+  console.log(user.name); // TypeScript knows user is not null here
+}
+```
+
+### With initializer function
+
+```typescript
+const [todos, setTodos] = useState<Todo[]>(() => {
+  const saved = localStorage.getItem('todos');
+  return saved ? JSON.parse(saved) : [];
+});
+```
+
+## Troubleshooting
+
+### My state updates but the component doesn't re-render
+
+If you mutate state directly, React won't detect the change:
+
+```javascript
+// ❌ Mutating object
+const [person, setPerson] = useState({ name: 'Alice' });
+person.name = 'Bob';
+setPerson(person); // Won't trigger re-render!
+
+// ✅ Creating new object
+setPerson({ ...person, name: 'Bob' }); // Will re-render
+```
+
+### My state shows the old value right after updating
+
+State updates are asynchronous and don't take effect until the next render:
+
+```javascript
+function handleClick() {
+  setCount(count + 1);
+  console.log(count); // Still shows old value!
+  // Use count + 1 if you need the new value immediately
+}
+```
+
+### I'm getting "Too many re-renders" error
+
+This happens when you call a state setter during render:
+
+```javascript
+function Component() {
+  const [count, setCount] = useState(0);
+  
+  // ❌ Calling setter during render
+  setCount(count + 1); // Infinite loop!
+  
+  return <div>{count}</div>;
+}
+```
+
+Move the state update to an event handler or useEffect:
+
+```javascript
+function Component() {
+  const [count, setCount] = useState(0);
+  
+  // ✅ In event handler
+  function handleClick() {
+    setCount(count + 1);
+  }
+  
+  return <button onClick={handleClick}>{count}</button>;
+}
+```
+
+### My initializer function runs on every render
+
+Make sure you're passing the function itself, not calling it:
+
+```javascript
+// ❌ Calling the function (runs every render)
+const [state, setState] = useState(expensiveFunction());
+
+// ✅ Passing the function (runs once)
+const [state, setState] = useState(expensiveFunction);
+
+// ✅ Arrow function wrapper
+const [state, setState] = useState(() => expensiveFunction());
+```
+
+## Common Patterns
+
+### Toggle boolean state
+
+```javascript
+const [isOpen, setIsOpen] = useState(false);
+
+// Toggle with updater function
+function toggle() {
+  setIsOpen(prev => !prev);
+}
+```
+
+### Multiple related state variables
+
+```javascript
+// Instead of multiple useState calls
+const [firstName, setFirstName] = useState('');
+const [lastName, setLastName] = useState('');
+const [age, setAge] = useState(0);
+
+// Consider using one useState with an object
+const [person, setPerson] = useState({
+  firstName: '',
+  lastName: '',
+  age: 0
+});
+```
+
+### State derived from props
+
+```javascript
+function Component({ initialColor }) {
+  // ✅ Derive state from prop once
+  const [color, setColor] = useState(initialColor);
+  
+  // If you need to sync with prop changes, use key or useEffect
+}
+```

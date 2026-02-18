@@ -1,0 +1,302 @@
+---
+title: Installation
+description: Install and set up React Compiler in your project
+---
+
+# Installation
+
+React Compiler consists of two main packages: the Babel plugin for code transformation and the ESLint plugin for validation.
+
+## Prerequisites
+
+Before installing React Compiler, ensure you have:
+
+- **Node.js**: Version 14.17.0 or higher (16.x, 18.x+ recommended)
+- **React**: Version 19 or experimental builds (`0.0.0-experimental-*`)
+- **Babel**: Version 7.2.0 or higher (for Babel users)
+
+## Installing the Babel Plugin
+
+The Babel plugin performs the actual code transformation.
+
+<CodeGroup>
+
+```bash npm
+npm install --save-dev babel-plugin-react-compiler
+```
+
+```bash yarn
+yarn add --dev babel-plugin-react-compiler
+```
+
+```bash pnpm
+pnpm add -D babel-plugin-react-compiler
+```
+
+</CodeGroup>
+
+## Installing the ESLint Plugin
+
+The ESLint plugin helps catch Rules of React violations before compilation.
+
+<CodeGroup>
+
+```bash npm
+npm install --save-dev eslint-plugin-react-compiler
+```
+
+```bash yarn
+yarn add --dev eslint-plugin-react-compiler
+```
+
+```bash pnpm
+pnpm add -D eslint-plugin-react-compiler
+```
+
+</CodeGroup>
+
+## Installing the Runtime
+
+The compiler generates code that imports from `react/compiler-runtime`. This is included with React 19:
+
+<CodeGroup>
+
+```bash npm
+npm install react@experimental react-dom@experimental
+```
+
+```bash yarn
+yarn add react@experimental react-dom@experimental
+```
+
+```bash pnpm
+pnpm add react@experimental react-dom@experimental
+```
+
+</CodeGroup>
+
+## Basic Configuration
+
+After installation, configure the Babel plugin:
+
+<CodeGroup>
+
+```javascript babel.config.js
+module.exports = {
+  plugins: [
+    ['babel-plugin-react-compiler', {
+      // Optional: configuration options
+    }],
+  ],
+};
+```
+
+```json .babelrc
+{
+  "plugins": [
+    ["babel-plugin-react-compiler", {
+      // Optional: configuration options
+    }]
+  ]
+}
+```
+
+</CodeGroup>
+
+## Verification
+
+To verify the installation is working, create a simple component:
+
+```javascript MyComponent.jsx
+function MyComponent({ name }) {
+  const greeting = `Hello, ${name}!`;
+  return <div>{greeting}</div>;
+}
+
+export default MyComponent;
+```
+
+Build your project and check the output. You should see the compiler runtime import:
+
+```javascript
+import { c as _c } from "react/compiler-runtime";
+
+function MyComponent({ name }) {
+  const $ = _c(2);
+  // ... memoization code
+}
+```
+
+## Framework-Specific Setup
+
+### Next.js
+
+For Next.js 13.5+:
+
+```javascript next.config.js
+const ReactCompilerConfig = {
+  /* ... */
+};
+
+module.exports = {
+  experimental: {
+    reactCompiler: ReactCompilerConfig,
+  },
+};
+```
+
+### Vite
+
+For Vite with `@vitejs/plugin-react`:
+
+```javascript vite.config.js
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+
+const ReactCompilerConfig = {
+  /* ... */
+};
+
+export default defineConfig({
+  plugins: [
+    react({
+      babel: {
+        plugins: [
+          ['babel-plugin-react-compiler', ReactCompilerConfig],
+        ],
+      },
+    }),
+  ],
+});
+```
+
+### Create React App
+
+For CRA, you'll need to use `react-app-rewired` or `craco`:
+
+<CodeGroup>
+
+```javascript craco.config.js
+module.exports = {
+  babel: {
+    plugins: [
+      ['babel-plugin-react-compiler', {
+        /* config */
+      }],
+    ],
+  },
+};
+```
+
+```javascript config-overrides.js
+module.exports = function override(config) {
+  // Add React Compiler plugin
+  config.babel = config.babel || {};
+  config.babel.plugins = config.babel.plugins || [];
+  config.babel.plugins.push([
+    'babel-plugin-react-compiler',
+    { /* config */ },
+  ]);
+  return config;
+};
+```
+
+</CodeGroup>
+
+### Webpack
+
+For custom Webpack setups with `babel-loader`:
+
+```javascript webpack.config.js
+module.exports = {
+  module: {
+    rules: [
+      {
+        test: /\.(js|jsx|ts|tsx)$/,
+        exclude: /node_modules/,
+        use: {
+          loader: 'babel-loader',
+          options: {
+            plugins: [
+              ['babel-plugin-react-compiler', {
+                // configuration
+              }],
+            ],
+          },
+        },
+      },
+    ],
+  },
+};
+```
+
+## TypeScript Support
+
+React Compiler works with TypeScript out of the box. Ensure you have Babel's TypeScript preset:
+
+<CodeGroup>
+
+```bash npm
+npm install --save-dev @babel/preset-typescript
+```
+
+```bash yarn
+yarn add --dev @babel/preset-typescript
+```
+
+</CodeGroup>
+
+```javascript babel.config.js
+module.exports = {
+  presets: [
+    '@babel/preset-typescript',
+    '@babel/preset-react',
+  ],
+  plugins: [
+    'babel-plugin-react-compiler',
+  ],
+};
+```
+
+## Troubleshooting
+
+### "Cannot find module 'react/compiler-runtime'"
+
+Ensure you're using React 19 or experimental builds:
+
+```bash
+npm install react@experimental react-dom@experimental
+```
+
+### Compilation Errors
+
+If you see compilation errors:
+
+1. Check that your code follows the Rules of React
+2. Install and configure the ESLint plugin
+3. Review error messages for specific issues
+
+### Performance Issues
+
+If compilation is slow:
+
+1. Use opt-in mode to compile specific files
+2. Exclude `node_modules` from compilation
+3. Enable caching in your build tool
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Configuration" icon="sliders" href="/compiler/configuration">
+    Configure compiler options for your project
+  </Card>
+  <Card title="ESLint Plugin" icon="shield-check" href="/compiler/eslint-plugin">
+    Set up linting for Rules of React
+  </Card>
+  <Card title="Babel Plugin" icon="plug" href="/compiler/babel-plugin">
+    Advanced Babel plugin configuration
+  </Card>
+  <Card title="How It Works" icon="gear" href="/compiler/how-it-works">
+    Understand the compilation process
+  </Card>
+</CardGroup>

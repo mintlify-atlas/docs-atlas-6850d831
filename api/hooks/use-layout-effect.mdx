@@ -1,0 +1,503 @@
+---
+title: useLayoutEffect
+description: Fire a synchronous effect before the browser paints the screen
+---
+
+`useLayoutEffect` is a version of `useEffect` that fires before the browser repaints the screen.
+
+```typescript
+function useLayoutEffect(
+  effect: () => (() => void) | void,
+  deps: Array<mixed> | void | null
+): void
+```
+
+<Warning>
+`useLayoutEffect` can hurt performance. Prefer `useEffect` when possible.
+</Warning>
+
+## Parameters
+
+<ParamField path="effect" type="() => (() => void) | void" required>
+  The function with your Effect's logic. Your effect function can optionally return a cleanup function.
+  
+  - React will call your effect function after React has updated the DOM but before the browser paints the screen
+  - React will call your cleanup function before the component is removed
+  - If dependencies change, React will run cleanup, then run your effect with new values
+</ParamField>
+
+<ParamField path="deps" type="Array<mixed> | void | null">
+  The list of all reactive values referenced inside the effect code. Works the same as `useEffect` dependencies.
+  
+  - If omitted, the effect runs after every render
+  - If `[]` (empty array), the effect runs only once (on mount)
+  - If `[dep1, dep2]`, the effect runs when any dependency changes
+</ParamField>
+
+## Returns
+
+`useLayoutEffect` returns `undefined`.
+
+## Usage
+
+### Measuring layout before the browser repaints
+
+Most components don't need to know their position and size on the screen. They only return JSX. Then the browser calculates their layout and repaints the screen.
+
+Sometimes, that's not enough. Imagine a tooltip that appears next to an element on hover. If there's enough space, the tooltip should appear above the element, but if there isn't enough space, it should appear below. To render the tooltip in the right position, you need to measure its height (before the browser paints):
+
+```javascript
+import { useLayoutEffect, useRef, useState } from 'react';
+
+function Tooltip({ targetRect, children }) {
+  const ref = useRef(null);
+  const [tooltipHeight, setTooltipHeight] = useState(0);
+  
+  useLayoutEffect(() => {
+    const { height } = ref.current.getBoundingClientRect();
+    setTooltipHeight(height);
+  }, []);
+  
+  // Now we can use tooltipHeight to position the tooltip
+  let tooltipY = 0;
+  if (targetRect !== null) {
+    tooltipY = targetRect.top - tooltipHeight;
+    if (tooltipY < 0) {
+      // It doesn't fit above, place below
+      tooltipY = targetRect.bottom;
+    }
+  }
+  
+  return (
+    <div
+      ref={ref}
+      style={{
+        position: 'absolute',
+        top: tooltipY,
+        left: targetRect?.left
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+```
+
+Here's how this works step by step:
+
+1. `Tooltip` renders with initial `tooltipHeight = 0` (so tooltip might be wrongly positioned)
+2. React places it in the DOM and runs the code in `useLayoutEffect`
+3. `useLayoutEffect` measures the height of the tooltip content
+4. React runs another render with the actual height
+5. Browser paints the tooltip in the correct position (user never sees it move)
+
+<Note>
+Rendering in two passes and blocking the browser hurts performance. Try to avoid this when you can.
+</Note>
+
+## useEffect vs useLayoutEffect
+
+<Tabs>
+  <Tab title="useEffect">
+    ```javascript
+    function Component() {
+      const [count, setCount] = useState(0);
+      
+      useEffect(() => {
+        // Runs AFTER browser paints
+        document.title = `Count: ${count}`;
+      }, [count]);
+      
+      return <div>{count}</div>;
+    }
+    ```
+    
+    **Timing:** After render → Browser paints → Effect runs
+    
+    **Use for:** Side effects that don't affect layout (data fetching, subscriptions, logging)
+  </Tab>
+  <Tab title="useLayoutEffect">
+    ```javascript
+    function Component() {
+      const ref = useRef(null);
+      const [height, setHeight] = useState(0);
+      
+      useLayoutEffect(() => {
+        // Runs BEFORE browser paints
+        const h = ref.current.offsetHeight;
+        setHeight(h);
+      }, []);
+      
+      return <div ref={ref}>Height: {height}</div>;
+    }
+    ```
+    
+    **Timing:** After render → Effect runs → Browser paints
+    
+    **Use for:** Measuring DOM, synchronous DOM mutations
+  </Tab>
+</Tabs>
+
+## When to use useLayoutEffect
+
+### Measuring elements
+
+```javascript
+function ResizeObserver({ children }) {
+  const ref = useRef(null);
+  const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
+  
+  useLayoutEffect(() => {
+    if (ref.current) {
+      const { width, height } = ref.current.getBoundingClientRect();
+      setDimensions({ width, height });
+    }
+  });
+  
+  return (
+    <div ref={ref}>
+      {children({ dimensions })}
+    </div>
+  );
+}
+```
+
+### Preventing visual flicker
+
+```javascript
+function Popover({ buttonRect, children }) {
+  const popoverRef = useRef(null);
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  
+  useLayoutEffect(() => {
+    if (buttonRect && popoverRef.current) {
+      const { width, height } = popoverRef.current.getBoundingClientRect();
+      
+      // Calculate position to ensure popover stays in viewport
+      let x = buttonRect.left;
+      let y = buttonRect.bottom + 10;
+      
+      if (x + width > window.innerWidth) {
+        x = window.innerWidth - width - 10;
+      }
+      
+      if (y + height > window.innerHeight) {
+        y = buttonRect.top - height - 10;
+      }
+      
+      setPosition({ x, y });
+    }
+  }, [buttonRect]);
+  
+  return (
+    <div
+      ref={popoverRef}
+      style={{
+        position: 'fixed',
+        left: position.x,
+        top: position.y
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+```
+
+### Reading scroll position
+
+```javascript
+function ScrollSpy({ items }) {
+  const [activeIndex, setActiveIndex] = useState(0);
+  
+  useLayoutEffect(() => {
+    function updateActiveIndex() {
+      // Check which section is in view
+      for (let i = 0; i < items.length; i++) {
+        const element = document.getElementById(items[i].id);
+        if (element) {
+          const rect = element.getBoundingClientRect();
+          if (rect.top >= 0 && rect.top < 100) {
+            setActiveIndex(i);
+            break;
+          }
+        }
+      }
+    }
+    
+    window.addEventListener('scroll', updateActiveIndex);
+    updateActiveIndex();
+    
+    return () => window.removeEventListener('scroll', updateActiveIndex);
+  }, [items]);
+  
+  return (
+    <nav>
+      {items.map((item, i) => (
+        <a
+          key={item.id}
+          href={`#${item.id}`}
+          style={{ fontWeight: i === activeIndex ? 'bold' : 'normal' }}
+        >
+          {item.title}
+        </a>
+      ))}
+    </nav>
+  );
+}
+```
+
+### Synchronizing with third-party DOM
+
+```javascript
+function Chart({ data }) {
+  const chartRef = useRef(null);
+  const chartInstanceRef = useRef(null);
+  
+  useLayoutEffect(() => {
+    if (!chartInstanceRef.current) {
+      // Create chart
+      chartInstanceRef.current = createChart(chartRef.current);
+    }
+    
+    // Update chart with new data
+    chartInstanceRef.current.setData(data);
+    
+    return () => {
+      // Cleanup
+      chartInstanceRef.current?.destroy();
+      chartInstanceRef.current = null;
+    };
+  }, [data]);
+  
+  return <div ref={chartRef} />;
+}
+```
+
+## Common Patterns
+
+### Auto-focus with scroll adjustment
+
+```javascript
+function AutoFocusInput() {
+  const inputRef = useRef(null);
+  
+  useLayoutEffect(() => {
+    inputRef.current.focus();
+    // Ensure element is visible after focus
+    inputRef.current.scrollIntoView({
+      behavior: 'smooth',
+      block: 'center'
+    });
+  }, []);
+  
+  return <input ref={inputRef} />;
+}
+```
+
+### Matching element heights
+
+```javascript
+function SyncHeights() {
+  const leftRef = useRef(null);
+  const rightRef = useRef(null);
+  
+  useLayoutEffect(() => {
+    const leftHeight = leftRef.current.offsetHeight;
+    const rightHeight = rightRef.current.offsetHeight;
+    const maxHeight = Math.max(leftHeight, rightHeight);
+    
+    leftRef.current.style.height = `${maxHeight}px`;
+    rightRef.current.style.height = `${maxHeight}px`;
+  });
+  
+  return (
+    <div style={{ display: 'flex' }}>
+      <div ref={leftRef}>Left content</div>
+      <div ref={rightRef}>Right content</div>
+    </div>
+  );
+}
+```
+
+## TypeScript
+
+```typescript
+import { useLayoutEffect, useRef } from 'react';
+
+function Component() {
+  const divRef = useRef<HTMLDivElement>(null);
+  
+  useLayoutEffect(() => {
+    if (divRef.current) {
+      const rect = divRef.current.getBoundingClientRect();
+      console.log(rect.width, rect.height);
+    }
+    
+    // Optional cleanup
+    return () => {
+      console.log('cleanup');
+    };
+  }, []);
+  
+  return <div ref={divRef}>Content</div>;
+}
+```
+
+## Troubleshooting
+
+### I'm getting a warning in server-side rendering
+
+`useLayoutEffect` doesn't run on the server. You'll see this warning:
+
+```
+Warning: useLayoutEffect does nothing on the server
+```
+
+Solutions:
+
+<Tabs>
+  <Tab title="Use useEffect">
+    ```javascript
+    // If the effect doesn't need to run before paint
+    useEffect(() => {
+      // Effect logic
+    }, []);
+    ```
+  </Tab>
+  <Tab title="Conditional hook">
+    ```javascript
+    import { useEffect, useLayoutEffect } from 'react';
+    
+    const useIsomorphicLayoutEffect =
+      typeof window !== 'undefined' ? useLayoutEffect : useEffect;
+    
+    function Component() {
+      useIsomorphicLayoutEffect(() => {
+        // Effect logic
+      }, []);
+    }
+    ```
+  </Tab>
+  <Tab title="Client-only render">
+    ```javascript
+    function Component() {
+      const [isClient, setIsClient] = useState(false);
+      
+      useEffect(() => {
+        setIsClient(true);
+      }, []);
+      
+      useLayoutEffect(() => {
+        if (!isClient) return;
+        // Effect logic
+      }, [isClient]);
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### My component flickers
+
+If you see a flicker, you might need `useLayoutEffect` instead of `useEffect`:
+
+```javascript
+// ❌ Flickers - effect runs after paint
+function Tooltip() {
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  
+  useEffect(() => {
+    // Calculate position
+    setPosition(calculatedPosition);
+  }, []);
+  // User sees tooltip at (0,0) then sees it jump
+}
+
+// ✅ No flicker - effect runs before paint
+function Tooltip() {
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  
+  useLayoutEffect(() => {
+    // Calculate position
+    setPosition(calculatedPosition);
+  }, []);
+  // User only sees tooltip at correct position
+}
+```
+
+### Performance is slow
+
+`useLayoutEffect` blocks the browser from painting. If your effect is slow, the UI will freeze:
+
+```javascript
+// ❌ Blocks painting - UI feels slow
+useLayoutEffect(() => {
+  // Expensive calculation
+  for (let i = 0; i < 1000000; i++) {
+    // ...
+  }
+}, []);
+
+// ✅ Doesn't block painting
+useEffect(() => {
+  // Move to useEffect if it doesn't affect layout
+  for (let i = 0; i < 1000000; i++) {
+    // ...
+  }
+}, []);
+```
+
+### When should I use useLayoutEffect?
+
+Use `useLayoutEffect` when:
+- ✅ Measuring DOM elements (getBoundingClientRect, offsetHeight, etc.)
+- ✅ Synchronous DOM mutations that affect layout
+- ✅ Preventing visual flicker
+- ✅ Reading scroll position
+
+Use `useEffect` when:
+- ✅ Data fetching
+- ✅ Setting up subscriptions
+- ✅ Logging
+- ✅ Any side effect that doesn't affect layout
+- ✅ Most cases!
+
+## Best Practices
+
+### Start with useEffect
+
+Always start with `useEffect`. Only switch to `useLayoutEffect` if you:
+1. See visual flicker
+2. Need to measure the DOM
+3. Need to make synchronous DOM updates
+
+### Keep it fast
+
+```javascript
+// ✅ Fast measurement
+useLayoutEffect(() => {
+  const height = ref.current.offsetHeight;
+  setHeight(height);
+}, []);
+
+// ❌ Slow operation - blocks paint
+useLayoutEffect(() => {
+  const data = expensiveCalculation();
+  updateDOM(data);
+}, []);
+```
+
+### Avoid on server
+
+```javascript
+// Create a custom hook
+const useIsomorphicLayoutEffect =
+  typeof window !== 'undefined' ? useLayoutEffect : useEffect;
+
+// Use everywhere
+function Component() {
+  useIsomorphicLayoutEffect(() => {
+    // Safe for SSR
+  }, []);
+}
+```

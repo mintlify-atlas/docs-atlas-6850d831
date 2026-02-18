@@ -1,0 +1,724 @@
+---
+title: useOptimistic
+description: Show optimistic UI updates while async actions are pending
+---
+
+`useOptimistic` is a React Hook that lets you show a different state while an async action is underway.
+
+```typescript
+function useOptimistic<S, A>(
+  passthrough: S,
+  reducer?: (S, A) => S
+): [S, (action: A) => void]
+```
+
+## Parameters
+
+<ParamField path="passthrough" type="S" required>
+  The value to be returned initially and whenever no action is pending.
+</ParamField>
+
+<ParamField path="reducer" type="(state: S, action: A) => S">
+  Optional function that takes the current state and an action, and returns the optimistic state to use while the action is pending.
+  
+  If omitted, the action itself is used as the new state.
+</ParamField>
+
+## Returns
+
+`useOptimistic` returns an array with exactly two values:
+
+<ResponseField name="[0]" type="S">
+  The optimistic state. It equals `passthrough` when no action is pending, otherwise it equals the value returned by `reducer`.
+</ResponseField>
+
+<ResponseField name="[1]" type="(action: A) => void">
+  The `addOptimistic` function that you call to add an optimistic update. It takes one argument of any type (the optimistic `action`), and will call the `reducer` with `passthrough` and the action.
+</ResponseField>
+
+## Usage
+
+### Optimistically updating forms
+
+`useOptimistic` provides a way to optimistically update the user interface before a background operation, like a network request, completes:
+
+```javascript
+import { useOptimistic, useState } from 'react';
+
+async function deliverMessage(message) {
+  await new Promise(resolve => setTimeout(resolve, 1000));
+  return message;
+}
+
+function Thread({ messages }) {
+  const [optimisticMessages, addOptimisticMessage] = useOptimistic(
+    messages,
+    (state, newMessage) => [
+      ...state,
+      { ...newMessage, sending: true }
+    ]
+  );
+  
+  async function sendMessage(formData) {
+    const message = {
+      text: formData.get('message'),
+      id: Date.now()
+    };
+    
+    addOptimisticMessage(message);
+    await deliverMessage(message);
+  }
+  
+  return (
+    <>
+      {optimisticMessages.map(message => (
+        <div key={message.id} style={{ opacity: message.sending ? 0.5 : 1 }}>
+          {message.text}
+          {message.sending && ' (Sending...)'}
+        </div>
+      ))}
+      <form action={sendMessage}>
+        <input name="message" />
+        <button type="submit">Send</button>
+      </form>
+    </>
+  );
+}
+```
+
+### Building an optimistic update mechanism
+
+The optimistic state is automatically reset when the action completes:
+
+```javascript
+import { useOptimistic } from 'react';
+import { send } from './api';
+
+function Chat({ messages }) {
+  const [optimisticMessages, addOptimisticMessage] = useOptimistic(
+    messages,
+    (currentMessages, newMessage) => [
+      ...currentMessages,
+      { ...newMessage, pending: true }
+    ]
+  );
+  
+  async function handleSend(formData) {
+    const text = formData.get('text');
+    
+    // Show optimistic message immediately
+    addOptimisticMessage({
+      id: crypto.randomUUID(),
+      text,
+      userId: currentUserId
+    });
+    
+    // Send to server
+    await send(text);
+    // Optimistic state automatically reverts when this completes
+  }
+  
+  return (
+    <>
+      <MessageList messages={optimisticMessages} />
+      <form action={handleSend}>
+        <input name="text" />
+        <button>Send</button>
+      </form>
+    </>
+  );
+}
+```
+
+## Common Patterns
+
+### Todo list with optimistic adds
+
+<Tabs>
+  <Tab title="Basic">
+    ```javascript
+    function TodoList({ todos }) {
+      const [optimisticTodos, addOptimisticTodo] = useOptimistic(
+        todos,
+        (state, newTodo) => [...state, newTodo]
+      );
+      
+      async function addTodo(formData) {
+        const title = formData.get('title');
+        const optimisticTodo = {
+          id: crypto.randomUUID(),
+          title,
+          completed: false,
+          pending: true
+        };
+        
+        addOptimisticTodo(optimisticTodo);
+        await createTodo(title);
+      }
+      
+      return (
+        <>
+          <ul>
+            {optimisticTodos.map(todo => (
+              <li
+                key={todo.id}
+                style={{ opacity: todo.pending ? 0.5 : 1 }}
+              >
+                {todo.title}
+                {todo.pending && ' (Adding...)'}
+              </li>
+            ))}
+          </ul>
+          <form action={addTodo}>
+            <input name="title" required />
+            <button>Add</button>
+          </form>
+        </>
+      );
+    }
+    ```
+  </Tab>
+  <Tab title="With Delete">
+    ```javascript
+    function TodoList({ todos }) {
+      const [optimisticTodos, updateOptimisticTodos] = useOptimistic(
+        todos,
+        (state, action) => {
+          switch (action.type) {
+            case 'add':
+              return [...state, { ...action.todo, pending: true }];
+            case 'delete':
+              return state.map(todo =>
+                todo.id === action.id
+                  ? { ...todo, deleting: true }
+                  : todo
+              );
+            default:
+              return state;
+          }
+        }
+      );
+      
+      async function addTodo(formData) {
+        const title = formData.get('title');
+        updateOptimisticTodos({
+          type: 'add',
+          todo: { id: crypto.randomUUID(), title, completed: false }
+        });
+        await createTodo(title);
+      }
+      
+      async function deleteTodo(id) {
+        updateOptimisticTodos({ type: 'delete', id });
+        await removeTodo(id);
+      }
+      
+      return (
+        <>
+          <ul>
+            {optimisticTodos
+              .filter(todo => !todo.deleting)
+              .map(todo => (
+                <li key={todo.id} style={{ opacity: todo.pending ? 0.5 : 1 }}>
+                  {todo.title}
+                  <button onClick={() => deleteTodo(todo.id)}>Delete</button>
+                </li>
+              ))}
+          </ul>
+          <form action={addTodo}>
+            <input name="title" required />
+            <button>Add</button>
+          </form>
+        </>
+      );
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### Like button with optimistic update
+
+```javascript
+function LikeButton({ postId, initialLikes, isLiked }) {
+  const [likes, setLikes] = useState(initialLikes);
+  const [liked, setLiked] = useState(isLiked);
+  
+  const [optimisticLikes, addOptimisticLike] = useOptimistic(
+    { likes, liked },
+    (state, newLiked) => ({
+      likes: newLiked ? state.likes + 1 : state.likes - 1,
+      liked: newLiked
+    })
+  );
+  
+  async function handleLike() {
+    const newLiked = !liked;
+    addOptimisticLike(newLiked);
+    
+    try {
+      const result = await toggleLike(postId, newLiked);
+      setLikes(result.likes);
+      setLiked(result.liked);
+    } catch (error) {
+      // Optimistic update automatically reverts on error
+      console.error('Failed to toggle like');
+    }
+  }
+  
+  return (
+    <button onClick={handleLike}>
+      {optimisticLikes.liked ? '♥' : '♡'} {optimisticLikes.likes}
+    </button>
+  );
+}
+```
+
+### Comments with optimistic adds
+
+```javascript
+function CommentSection({ postId, initialComments }) {
+  const [comments, setComments] = useState(initialComments);
+  const [optimisticComments, addOptimisticComment] = useOptimistic(
+    comments,
+    (state, newComment) => [
+      ...state,
+      { ...newComment, pending: true }
+    ]
+  );
+  
+  async function handleSubmit(formData) {
+    const text = formData.get('comment');
+    
+    const optimisticComment = {
+      id: `temp-${Date.now()}`,
+      text,
+      author: 'You',
+      timestamp: new Date().toISOString(),
+      pending: true
+    };
+    
+    addOptimisticComment(optimisticComment);
+    
+    try {
+      const newComment = await postComment(postId, text);
+      setComments([...comments, newComment]);
+    } catch (error) {
+      alert('Failed to post comment');
+    }
+  }
+  
+  return (
+    <div>
+      <ul>
+        {optimisticComments.map(comment => (
+          <li
+            key={comment.id}
+            style={{
+              opacity: comment.pending ? 0.5 : 1,
+              fontStyle: comment.pending ? 'italic' : 'normal'
+            }}
+          >
+            <strong>{comment.author}</strong>: {comment.text}
+            {comment.pending && ' (Posting...)'}
+          </li>
+        ))}
+      </ul>
+      
+      <form action={handleSubmit}>
+        <textarea name="comment" required placeholder="Add a comment..." />
+        <button type="submit">Post</button>
+      </form>
+    </div>
+  );
+}
+```
+
+### Shopping cart with optimistic updates
+
+```javascript
+function ShoppingCart({ items }) {
+  const [optimisticItems, updateOptimisticItems] = useOptimistic(
+    items,
+    (state, action) => {
+      switch (action.type) {
+        case 'add':
+          return [...state, { ...action.item, pending: true }];
+        case 'remove':
+          return state.filter(item => item.id !== action.id);
+        case 'update-quantity':
+          return state.map(item =>
+            item.id === action.id
+              ? { ...item, quantity: action.quantity, pending: true }
+              : item
+          );
+        default:
+          return state;
+      }
+    }
+  );
+  
+  async function addItem(product) {
+    updateOptimisticItems({
+      type: 'add',
+      item: { ...product, quantity: 1 }
+    });
+    await addToCart(product.id);
+  }
+  
+  async function updateQuantity(id, quantity) {
+    updateOptimisticItems({
+      type: 'update-quantity',
+      id,
+      quantity
+    });
+    await updateCartItem(id, quantity);
+  }
+  
+  async function removeItem(id) {
+    updateOptimisticItems({ type: 'remove', id });
+    await removeFromCart(id);
+  }
+  
+  return (
+    <div>
+      {optimisticItems.map(item => (
+        <div key={item.id} style={{ opacity: item.pending ? 0.7 : 1 }}>
+          <span>{item.name}</span>
+          <input
+            type="number"
+            value={item.quantity}
+            onChange={e => updateQuantity(item.id, parseInt(e.target.value))}
+            min="1"
+          />
+          <button onClick={() => removeItem(item.id)}>Remove</button>
+        </div>
+      ))}
+    </div>
+  );
+}
+```
+
+## TypeScript
+
+```typescript
+import { useOptimistic } from 'react';
+
+interface Todo {
+  id: string;
+  title: string;
+  completed: boolean;
+  pending?: boolean;
+}
+
+type TodoAction =
+  | { type: 'add'; todo: Todo }
+  | { type: 'toggle'; id: string }
+  | { type: 'delete'; id: string };
+
+function TodoList({ todos }: { todos: Todo[] }) {
+  const [optimisticTodos, updateOptimisticTodos] = useOptimistic<
+    Todo[],
+    TodoAction
+  >(
+    todos,
+    (state, action) => {
+      switch (action.type) {
+        case 'add':
+          return [...state, { ...action.todo, pending: true }];
+        case 'toggle':
+          return state.map(todo =>
+            todo.id === action.id
+              ? { ...todo, completed: !todo.completed, pending: true }
+              : todo
+          );
+        case 'delete':
+          return state.filter(todo => todo.id !== action.id);
+        default:
+          return state;
+      }
+    }
+  );
+  
+  // ... rest of component
+}
+```
+
+### Without reducer
+
+```typescript
+interface Message {
+  id: string;
+  text: string;
+  sending?: boolean;
+}
+
+function Chat({ messages }: { messages: Message[] }) {
+  const [optimisticMessages, addOptimisticMessage] = useOptimistic<Message[]>(
+    messages
+  );
+  
+  async function sendMessage(text: string) {
+    const newMessages: Message[] = [
+      ...messages,
+      { id: crypto.randomUUID(), text, sending: true }
+    ];
+    addOptimisticMessage(newMessages);
+    await postMessage(text);
+  }
+}
+```
+
+## Troubleshooting
+
+### My optimistic update doesn't revert
+
+The optimistic state automatically reverts when:
+1. The component re-renders with new `passthrough` value
+2. The async operation completes and the parent updates the real state
+
+Make sure you're updating the parent state after the async operation:
+
+```javascript
+// ❌ Optimistic state won't revert
+async function addItem(item) {
+  addOptimisticItem(item);
+  await saveItem(item);
+  // Forgot to update parent state!
+}
+
+// ✅ Optimistic state reverts to real state
+async function addItem(item) {
+  addOptimisticItem(item);
+  const saved = await saveItem(item);
+  setItems(prev => [...prev, saved]); // Update parent
+}
+```
+
+### The optimistic state looks wrong
+
+Make sure your reducer returns the correct optimistic state:
+
+```javascript
+// ❌ Mutates state
+const [optimistic, add] = useOptimistic(items, (state, item) => {
+  state.push(item); // Don't mutate!
+  return state;
+});
+
+// ✅ Returns new state
+const [optimistic, add] = useOptimistic(items, (state, item) => {
+  return [...state, item];
+});
+```
+
+### Multiple optimistic updates conflict
+
+If you need multiple independent optimistic updates, use separate `useOptimistic` hooks:
+
+```javascript
+function Component({ items, categories }) {
+  const [optimisticItems, updateItems] = useOptimistic(items);
+  const [optimisticCategories, updateCategories] = useOptimistic(categories);
+  
+  // Each can be updated independently
+}
+```
+
+## Best Practices
+
+### Show pending state visually
+
+```javascript
+const [optimisticTodos, addOptimistic] = useOptimistic(
+  todos,
+  (state, newTodo) => [...state, { ...newTodo, pending: true }]
+);
+
+return optimisticTodos.map(todo => (
+  <div
+    style={{
+      opacity: todo.pending ? 0.5 : 1,
+      pointerEvents: todo.pending ? 'none' : 'auto'
+    }}
+  >
+    {todo.title}
+    {todo.pending && ' ⏳'}
+  </div>
+));
+```
+
+### Handle errors gracefully
+
+```javascript
+async function handleSubmit(formData) {
+  const item = { id: Date.now(), text: formData.get('text') };
+  
+  addOptimistic(item);
+  
+  try {
+    await saveItem(item);
+  } catch (error) {
+    // Optimistic update automatically reverts
+    alert('Failed to save. Please try again.');
+  }
+}
+```
+
+### Use with Server Actions
+
+```javascript
+'use client';
+
+import { useOptimistic } from 'react';
+import { addTodo } from './actions';
+
+function TodoList({ todos }) {
+  const [optimisticTodos, addOptimisticTodo] = useOptimistic(
+    todos,
+    (state, newTodo) => [...state, newTodo]
+  );
+  
+  async function handleSubmit(formData) {
+    const title = formData.get('title');
+    addOptimisticTodo({
+      id: Date.now(),
+      title,
+      pending: true
+    });
+    
+    await addTodo(formData);
+  }
+  
+  return (
+    <form action={handleSubmit}>
+      {/* ... */}
+    </form>
+  );
+}
+```
+
+### Combine with useActionState
+
+```javascript
+import { useOptimistic, useActionState } from 'react';
+
+function MessageThread({ messages }) {
+  const [optimisticMessages, addOptimisticMessage] = useOptimistic(
+    messages,
+    (state, newMessage) => [...state, newMessage]
+  );
+  
+  const [state, formAction] = useActionState(
+    async (prevState, formData) => {
+      const text = formData.get('text');
+      addOptimisticMessage({
+        id: Date.now(),
+        text,
+        pending: true
+      });
+      
+      const result = await sendMessage(text);
+      return result;
+    },
+    null
+  );
+  
+  return (
+    <>
+      {optimisticMessages.map(msg => (
+        <div key={msg.id}>{msg.text}</div>
+      ))}
+      <form action={formAction}>
+        <input name="text" />
+        <button>Send</button>
+      </form>
+    </>
+  );
+}
+```
+
+## When to use useOptimistic
+
+Use `useOptimistic` when:
+- ✅ You want immediate UI feedback
+- ✅ The operation is likely to succeed
+- ✅ You can easily revert on failure
+- ✅ Network latency would make the UI feel slow
+
+Don't use it when:
+- ❌ The operation might fail frequently
+- ❌ Reverting would confuse users
+- ❌ The operation has side effects that can't be undone
+- ❌ The UI is already fast enough
+
+## Real-World Example
+
+Complete social media post with likes and comments:
+
+```javascript
+function Post({ postId, initialLikes, initialComments }) {
+  const [likes, setLikes] = useState(initialLikes);
+  const [comments, setComments] = useState(initialComments);
+  
+  const [optimisticLikes, updateLikes] = useOptimistic(likes);
+  const [optimisticComments, addComment] = useOptimistic(
+    comments,
+    (state, comment) => [...state, { ...comment, pending: true }]
+  );
+  
+  async function handleLike() {
+    const newCount = optimisticLikes + 1;
+    updateLikes(newCount);
+    
+    try {
+      const result = await likePost(postId);
+      setLikes(result.likes);
+    } catch (error) {
+      alert('Failed to like post');
+    }
+  }
+  
+  async function handleComment(formData) {
+    const text = formData.get('comment');
+    const optimistic = {
+      id: Date.now(),
+      text,
+      author: 'You',
+      timestamp: new Date()
+    };
+    
+    addComment(optimistic);
+    
+    try {
+      const result = await postComment(postId, text);
+      setComments(prev => [...prev, result]);
+    } catch (error) {
+      alert('Failed to post comment');
+    }
+  }
+  
+  return (
+    <article>
+      <button onClick={handleLike}>
+        ♥ {optimisticLikes}
+      </button>
+      
+      <div>
+        {optimisticComments.map(comment => (
+          <div
+            key={comment.id}
+            style={{ opacity: comment.pending ? 0.5 : 1 }}
+          >
+            <strong>{comment.author}</strong>: {comment.text}
+          </div>
+        ))}
+      </div>
+      
+      <form action={handleComment}>
+        <input name="comment" placeholder="Add a comment..." />
+        <button type="submit">Post</button>
+      </form>
+    </article>
+  );
+}
+```

@@ -1,0 +1,420 @@
+---
+title: useMemo
+description: Cache the result of an expensive calculation between re-renders
+---
+
+`useMemo` is a React Hook that lets you cache the result of a calculation between re-renders.
+
+```typescript
+function useMemo<T>(
+  create: () => T,
+  deps: Array<mixed> | void | null
+): T
+```
+
+## Parameters
+
+<ParamField path="create" type="() => T" required>
+  The function calculating the value that you want to cache. It should be pure, take no arguments, and return a value of any type. React will call your function during the initial render. On subsequent renders, React will return the same value if the dependencies haven't changed. Otherwise, it will call `create`, return its result, and store it for later reuse.
+</ParamField>
+
+<ParamField path="deps" type="Array<mixed> | void | null">
+  The list of all reactive values referenced inside the `create` code. React will compare each dependency with its previous value using the `Object.is` comparison.
+  
+  - If omitted, useMemo will recalculate on every render (defeats the purpose)
+  - If `[]` (empty array), the value is calculated only once
+  - If `[dep1, dep2]`, recalculates when dependencies change
+</ParamField>
+
+## Returns
+
+On the initial render, `useMemo` returns the result of calling `create` with no arguments.
+
+During subsequent renders, it will either return an already stored value from the last render (if the dependencies haven't changed), or call `create` again and return the result that `create` has returned.
+
+## Usage
+
+### Skipping expensive recalculations
+
+To cache a calculation between re-renders, wrap it in `useMemo`:
+
+```javascript
+import { useMemo } from 'react';
+
+function TodoList({ todos, filter }) {
+  const visibleTodos = useMemo(() => {
+    // Only recalculates when todos or filter changes
+    return todos.filter(todo => {
+      if (filter === 'active') {
+        return !todo.completed;
+      }
+      if (filter === 'completed') {
+        return todo.completed;
+      }
+      return true;
+    });
+  }, [todos, filter]);
+  
+  return (
+    <ul>
+      {visibleTodos.map(todo => (
+        <li key={todo.id}>{todo.text}</li>
+      ))}
+    </ul>
+  );
+}
+```
+
+### Skipping re-rendering of components
+
+When you pass an object or array to a child component, create it with `useMemo` to keep the same reference:
+
+```javascript
+import { useMemo, memo } from 'react';
+
+function Parent({ items }) {
+  // ❌ New object every render - child always re-renders
+  const options = { sort: 'asc', filter: 'all' };
+  
+  // ✅ Same object reference - child only re-renders when deps change
+  const options = useMemo(() => {
+    return { sort: 'asc', filter: 'all' };
+  }, []);
+  
+  return <MemoizedChild items={items} options={options} />;
+}
+
+const MemoizedChild = memo(function Child({ items, options }) {
+  // ...
+});
+```
+
+<Note>
+This pattern is only useful when the child component is wrapped in `memo`. Without `memo`, the child will re-render anyway.
+</Note>
+
+### Memoizing a dependency of another Hook
+
+Prevent an effect from running unnecessarily:
+
+```javascript
+function Dropdown({ options }) {
+  // ❌ searchOptions is a new object every render
+  const searchOptions = {
+    options: options,
+    caseSensitive: false
+  };
+  
+  useEffect(() => {
+    // Effect runs on every render!
+  }, [searchOptions]);
+  
+  // ✅ searchOptions only changes when options changes
+  const searchOptions = useMemo(() => {
+    return {
+      options: options,
+      caseSensitive: false
+    };
+  }, [options]);
+  
+  useEffect(() => {
+    // Effect only runs when searchOptions actually changes
+  }, [searchOptions]);
+}
+```
+
+### Memoizing a function
+
+Use `useCallback` instead:
+
+```javascript
+// These are equivalent:
+const memoizedFunction = useMemo(() => {
+  return (a, b) => a + b;
+}, []);
+
+const memoizedFunction = useCallback((a, b) => {
+  return a + b;
+}, []);
+```
+
+## Common Patterns
+
+### Expensive calculations
+
+<Tabs>
+  <Tab title="Sorting">
+    ```javascript
+    function Table({ data, sortKey }) {
+      const sortedData = useMemo(() => {
+        return [...data].sort((a, b) => {
+          return a[sortKey] > b[sortKey] ? 1 : -1;
+        });
+      }, [data, sortKey]);
+      
+      return <TableView data={sortedData} />;
+    }
+    ```
+  </Tab>
+  <Tab title="Filtering">
+    ```javascript
+    function SearchResults({ items, query }) {
+      const results = useMemo(() => {
+        return items.filter(item =>
+          item.name.toLowerCase().includes(query.toLowerCase())
+        );
+      }, [items, query]);
+      
+      return <ResultsList results={results} />;
+    }
+    ```
+  </Tab>
+  <Tab title="Aggregation">
+    ```javascript
+    function Dashboard({ transactions }) {
+      const stats = useMemo(() => {
+        return {
+          total: transactions.reduce((sum, t) => sum + t.amount, 0),
+          count: transactions.length,
+          average: transactions.reduce((sum, t) => sum + t.amount, 0) / transactions.length
+        };
+      }, [transactions]);
+      
+      return <StatsView stats={stats} />;
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### Creating objects and arrays
+
+```javascript
+function Chart({ data, width, height }) {
+  // Memoize config object
+  const chartConfig = useMemo(() => ({
+    width,
+    height,
+    margins: { top: 20, right: 20, bottom: 30, left: 40 },
+    colors: ['#ff0000', '#00ff00', '#0000ff']
+  }), [width, height]);
+  
+  return <ChartComponent data={data} config={chartConfig} />;
+}
+```
+
+### Computing derived state
+
+```javascript
+function UserProfile({ user }) {
+  const displayName = useMemo(() => {
+    if (user.nickname) {
+      return user.nickname;
+    }
+    if (user.firstName && user.lastName) {
+      return `${user.firstName} ${user.lastName}`;
+    }
+    return user.email;
+  }, [user.nickname, user.firstName, user.lastName, user.email]);
+  
+  return <h1>{displayName}</h1>;
+}
+```
+
+### Preventing unnecessary deep comparisons
+
+```javascript
+function TodoList({ todos }) {
+  // Extract IDs once
+  const todoIds = useMemo(() => {
+    return todos.map(todo => todo.id);
+  }, [todos]);
+  
+  useEffect(() => {
+    // Only runs when the list of IDs changes
+    updateVisibleTodos(todoIds);
+  }, [todoIds]);
+}
+```
+
+## TypeScript
+
+```typescript
+import { useMemo } from 'react';
+
+// Type is inferred from return value
+const sortedItems = useMemo(() => {
+  return items.sort((a, b) => a.value - b.value);
+}, [items]);
+// Type: typeof items
+
+// Explicitly specify type
+interface Stats {
+  total: number;
+  average: number;
+}
+
+const stats = useMemo<Stats>(() => {
+  return {
+    total: items.reduce((sum, item) => sum + item.value, 0),
+    average: items.reduce((sum, item) => sum + item.value, 0) / items.length
+  };
+}, [items]);
+
+// With complex types
+interface User {
+  id: string;
+  name: string;
+}
+
+const userMap = useMemo<Map<string, User>>(() => {
+  const map = new Map();
+  users.forEach(user => map.set(user.id, user));
+  return map;
+}, [users]);
+```
+
+## Troubleshooting
+
+### My calculation runs on every render
+
+Make sure you provided a dependency array:
+
+```javascript
+// ❌ Missing dependency array
+const value = useMemo(() => {
+  return expensiveCalculation();
+}); // Recalculates every render!
+
+// ✅ With dependency array
+const value = useMemo(() => {
+  return expensiveCalculation();
+}, []); // Calculates once
+```
+
+### My useMemo call runs on every render despite dependencies
+
+One of your dependencies might be changing on every render:
+
+```javascript
+function Component() {
+  const items = [1, 2, 3]; // New array every render
+  
+  const doubled = useMemo(() => {
+    return items.map(x => x * 2);
+  }, [items]); // items changes every render!
+}
+```
+
+Solutions:
+- Move constant values outside the component
+- Use `useMemo` for the dependency too
+- Depend on individual values instead of objects/arrays
+
+### How to tell if a calculation is expensive?
+
+Add a console.time to measure:
+
+```javascript
+function Component() {
+  const result = useMemo(() => {
+    console.time('calculation');
+    const value = expensiveCalculation();
+    console.timeEnd('calculation');
+    return value;
+  }, [deps]);
+}
+```
+
+<Note>
+If the calculation takes less than 1ms, it's probably not worth memoizing. The overhead of `useMemo` itself might be more expensive than the calculation.
+</Note>
+
+### Should I add useMemo everywhere?
+
+No! Only use `useMemo` when:
+
+1. The calculation is expensive (takes >1ms)
+2. You're creating objects/arrays passed to memoized components
+3. The value is used as a dependency in another Hook
+4. You've measured and confirmed it improves performance
+
+```javascript
+// ❌ Unnecessary - simple calculation
+const doubled = useMemo(() => count * 2, [count]);
+
+// ✅ Better - just calculate it
+const doubled = count * 2;
+```
+
+```javascript
+// ❌ Unnecessary - not passed to memoized component
+const items = useMemo(() => {
+  return data.map(x => ({ ...x, formatted: format(x) }));
+}, [data]);
+
+return <RegularComponent items={items} />;
+
+// ✅ Necessary - passed to memoized component
+const items = useMemo(() => {
+  return data.map(x => ({ ...x, formatted: format(x) }));
+}, [data]);
+
+return <MemoizedComponent items={items} />;
+```
+
+## Performance Tips
+
+### Don't optimize prematurely
+
+1. Write code normally first
+2. Use React DevTools Profiler to find slow components
+3. Add `useMemo` only where it helps
+4. Measure again to confirm improvement
+
+### Common mistakes
+
+```javascript
+// ❌ Memoizing a primitive - no benefit
+const value = useMemo(() => props.count * 2, [props.count]);
+
+// ✅ Just calculate it
+const value = props.count * 2;
+```
+
+```javascript
+// ❌ Expensive dependency calculation defeats the purpose
+const filtered = useMemo(() => {
+  return items.filter(matchesFilter);
+}, [items, items.map(i => i.id)]); // map runs every time!
+
+// ✅ Only depend on what changes
+const filtered = useMemo(() => {
+  return items.filter(matchesFilter);
+}, [items]);
+```
+
+### When NOT to use useMemo
+
+- Primitive calculations (math, string operations)
+- Creating elements (`<div>`, `<Component />`)
+- Simple array operations on small arrays (less than 100 items)
+- Object/array literals that aren't passed anywhere
+
+## useMemo vs useCallback
+
+```javascript
+// useMemo: Cache a computed value
+const sortedItems = useMemo(() => {
+  return items.sort((a, b) => a.value - b.value);
+}, [items]);
+
+// useCallback: Cache a function
+const handleSort = useCallback(() => {
+  setSortedItems(items.sort((a, b) => a.value - b.value));
+}, [items]);
+```
+
+| Hook | Caches | Use Case |
+|------|--------|----------|
+| `useMemo` | The result | Expensive calculations, derived state |
+| `useCallback` | The function | Passing callbacks to memoized components |

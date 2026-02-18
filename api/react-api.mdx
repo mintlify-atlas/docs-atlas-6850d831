@@ -1,0 +1,145 @@
+---
+title: React Top-Level API
+description: Complete reference for all top-level APIs exported from the React package
+---
+
+The React package contains all the APIs you need to define and work with React components. This page documents all top-level APIs organized by category.
+
+## Components
+
+React provides base classes and utilities for defining components:
+
+- [`Component`](/api/components#component) - Base class for React components using ES6 classes
+- [`PureComponent`](/api/components#purecomponent) - Component variant with built-in shallow comparison for props and state
+
+## Creating Elements
+
+These APIs let you create React elements programmatically:
+
+- [`createElement(type, props, ...children)`](/api/create-element#createelement) - Create and return a new React element
+- [`cloneElement(element, props, ...children)`](/api/create-element#cloneelement) - Clone and return a new React element
+- [`isValidElement(object)`](/api/create-element#isvalidelement) - Verify if an object is a React element
+
+## Refs
+
+Refs provide a way to access DOM nodes or React elements:
+
+- `createRef()` - Create a ref object that can be attached to elements via the ref attribute
+
+## Fragments
+
+Fragments let you group multiple elements without adding extra DOM nodes:
+
+- [`Fragment`](/api/fragments) or [`<></>`](/api/fragments#short-syntax) - Group multiple children without a wrapper node
+
+## Context
+
+Context provides a way to pass data through the component tree:
+
+- `createContext(defaultValue)` - Create a Context object for sharing data across the component tree
+
+## Higher-Order Components
+
+These APIs wrap components to add additional functionality:
+
+- `forwardRef(render)` - Forward refs to child components
+- `memo(Component, compare?)` - Memoize a component to skip re-renders with same props
+- `lazy(load)` - Lazy-load a component with dynamic import
+
+## Children Utilities
+
+Utilities for working with the `props.children` data structure:
+
+- [`Children.map(children, fn)`](/api/children#childrenmap) - Map over children with automatic key handling
+- [`Children.forEach(children, fn)`](/api/children#childrenforeach) - Iterate over children
+- [`Children.count(children)`](/api/children#childrencount) - Count the number of children
+- [`Children.toArray(children)`](/api/children#childrentoarray) - Convert children to a flat array
+- [`Children.only(children)`](/api/children#childrenonly) - Assert that children contains only one child
+
+## Development Mode Components
+
+These components enable additional checks and features during development:
+
+- [`StrictMode`](/api/strict-mode) - Enable strict mode checks for descendants
+- `Profiler` - Measure rendering performance of components
+
+## Suspense
+
+Suspense lets you display fallback content while waiting for components to load:
+
+- [`Suspense`](/api/suspense) - Display fallback UI while children are loading
+
+## Hooks
+
+Hooks let you use state and other React features in function components:
+
+### State Hooks
+
+- `useState(initialState)` - Add state to function components
+- `useReducer(reducer, initialArg, init?)` - Manage complex state with a reducer
+
+### Effect Hooks
+
+- `useEffect(setup, dependencies?)` - Synchronize with external systems
+- `useLayoutEffect(setup, dependencies?)` - Fires synchronously after all DOM mutations
+- `useInsertionEffect(setup, dependencies?)` - Fires before any DOM mutations (for CSS-in-JS)
+
+### Ref Hooks
+
+- `useRef(initialValue)` - Create a mutable ref object
+- `useImperativeHandle(ref, createHandle, dependencies?)` - Customize the ref value exposed to parent
+
+### Context Hook
+
+- `useContext(Context)` - Read context value
+
+### Performance Hooks
+
+- `useMemo(calculateValue, dependencies)` - Cache calculation results
+- `useCallback(fn, dependencies)` - Cache function definitions
+
+### Transition Hooks
+
+- `useTransition()` - Mark state updates as non-urgent transitions
+- `useDeferredValue(value, initialValue?)` - Defer updating non-urgent parts of UI
+- `startTransition(callback)` - Mark updates in callback as transitions
+
+### Other Hooks
+
+- `useId()` - Generate unique IDs for accessibility attributes
+- `useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot?)` - Subscribe to external stores
+- `use(promise)` - Read the value of a Promise or Context
+- `useOptimistic(state, updateFn)` - Show optimistic state during async operations
+- `useActionState(action, initialState, permalink?)` - Manage state for form actions
+- `useDebugValue(value, format?)` - Add a label in React DevTools for custom hooks
+
+## Caching
+
+APIs for caching data and computations:
+
+- `cache(fn)` - Cache function results across renders
+- `cacheSignal()` - Create a signal for cache invalidation
+
+## Unstable APIs
+
+These APIs are experimental and may change:
+
+- `unstable_SuspenseList` - Coordinate loading states of multiple Suspense boundaries
+- `unstable_LegacyHidden` - Hide subtree without unmounting
+- `Activity` - Track and manage activity states
+- `unstable_getCacheForType(resourceType)` - Access cache for a specific resource type
+- `unstable_useCacheRefresh()` - Refresh cached resources
+- `unstable_Scope` - Create scope for querying DOM elements
+- `unstable_TracingMarker` - Add markers for performance tracing
+- `ViewTransition` - Coordinate view transitions
+- `unstable_startGestureTransition(callback)` - Mark updates as gesture transitions
+- `optimisticKey` - Special key for optimistic updates
+
+## Development-Only APIs
+
+- `act(callback)` - Wrap test code that renders or updates components
+- `captureOwnerStack()` - Capture the component stack for debugging
+
+## Version
+
+- `version` - Current React version string

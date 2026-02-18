@@ -1,0 +1,551 @@
+---
+title: ESLint Plugin
+description: Configure ESLint to validate Rules of React with React Compiler
+---
+
+# ESLint Plugin
+
+The `eslint-plugin-react-compiler` package provides ESLint rules that surface problematic React code found by the React Compiler, helping you catch violations of the Rules of React before compilation.
+
+## Installation
+
+<CodeGroup>
+
+```bash npm
+npm install --save-dev eslint eslint-plugin-react-compiler
+```
+
+```bash yarn
+yarn add --dev eslint eslint-plugin-react-compiler
+```
+
+```bash pnpm
+pnpm add -D eslint eslint-plugin-react-compiler
+```
+
+</CodeGroup>
+
+## Configuration
+
+### Flat Config (ESLint 8+)
+
+For modern ESLint flat config:
+
+```javascript eslint.config.mjs
+import reactCompiler from 'eslint-plugin-react-compiler';
+import react from 'eslint-plugin-react';
+
+export default [
+  {
+    plugins: {
+      'react-compiler': reactCompiler,
+    },
+    rules: {
+      'react-compiler/react-compiler': 'error',
+    },
+  },
+];
+```
+
+### Using Recommended Config
+
+```javascript eslint.config.mjs
+import reactCompiler from 'eslint-plugin-react-compiler';
+import react from 'eslint-plugin-react';
+
+export default [
+  // Your existing config
+  {
+    ...react.configs.flat.recommended,
+    settings: { react: { version: 'detect' } },
+  },
+  // Add React Compiler recommended config
+  reactCompiler.configs.recommended,
+];
+```
+
+### Legacy Config (.eslintrc)
+
+For `.eslintrc` configuration:
+
+<CodeGroup>
+
+```json .eslintrc.json
+{
+  "plugins": ["react-compiler"],
+  "rules": {
+    "react-compiler/react-compiler": "error"
+  }
+}
+```
+
+```javascript .eslintrc.js
+module.exports = {
+  plugins: ['react-compiler'],
+  rules: {
+    'react-compiler/react-compiler': 'error',
+  },
+};
+```
+
+```yaml .eslintrc.yml
+plugins:
+  - react-compiler
+rules:
+  react-compiler/react-compiler: error
+```
+
+</CodeGroup>
+
+## Rule Configuration
+
+### Error Level
+
+Configure the rule severity:
+
+```javascript
+export default [
+  {
+    rules: {
+      // Error - blocks CI/commits
+      'react-compiler/react-compiler': 'error',
+      
+      // Warning - shows in editor but doesn't fail
+      // 'react-compiler/react-compiler': 'warn',
+      
+      // Off - disable the rule
+      // 'react-compiler/react-compiler': 'off',
+    },
+  },
+];
+```
+
+### Rule Options
+
+The rule accepts the same configuration options as the Babel plugin:
+
+```javascript eslint.config.mjs
+export default [
+  {
+    rules: {
+      'react-compiler/react-compiler': [
+        'error',
+        {
+          environment: {
+            // Compiler environment options
+            validateHooksUsage: true,
+            validateRefAccessDuringRender: true,
+            validateNoSetStateInRender: true,
+          },
+        },
+      ],
+    },
+  },
+];
+```
+
+## What It Checks
+
+The ESLint plugin runs the React Compiler on your code and reports React-specific errors. It validates:
+
+### Rules of Hooks
+
+```javascript
+// ✗ Bad - conditional hook call
+function Component({ condition }) {
+  if (condition) {
+    useState(0); // Error: Hooks cannot be called conditionally
+  }
+}
+
+// ✓ Good
+function Component({ condition }) {
+  const [state, setState] = useState(0);
+  if (condition) {
+    setState(1);
+  }
+}
+```
+
+### setState During Render
+
+```javascript
+// ✗ Bad - unconditional setState in render
+function Component() {
+  const [count, setCount] = useState(0);
+  setCount(count + 1); // Error: setState called during render
+  return <div>{count}</div>;
+}
+
+// ✓ Good - setState in event handler
+function Component() {
+  const [count, setCount] = useState(0);
+  const handleClick = () => setCount(count + 1);
+  return <button onClick={handleClick}>{count}</button>;
+}
+```
+
+### Ref Access During Render
+
+```javascript
+// ✗ Bad - accessing ref.current in render
+function Component() {
+  const ref = useRef(null);
+  const value = ref.current; // Error: ref.current accessed during render
+  return <div>{value}</div>;
+}
+
+// ✓ Good - access ref in effect or event handler
+function Component() {
+  const ref = useRef(null);
+  useEffect(() => {
+    console.log(ref.current);
+  });
+  return <div ref={ref}>Content</div>;
+}
+```
+
+### Exhaustive Dependencies
+
+```javascript
+// ✗ Bad - missing dependency
+function Component({ userId }) {
+  const [user, setUser] = useState(null);
+  useEffect(() => {
+    fetchUser(userId).then(setUser);
+  }, []); // Error: Missing dependency 'userId'
+}
+
+// ✓ Good - complete dependencies
+function Component({ userId }) {
+  const [user, setUser] = useState(null);
+  useEffect(() => {
+    fetchUser(userId).then(setUser);
+  }, [userId]);
+}
+```
+
+### Component Mutations
+
+```javascript
+// ✗ Bad - mutating props
+function Component({ items }) {
+  items.push('new'); // Error: Mutating props
+  return <List items={items} />;
+}
+
+// ✓ Good - creating new array
+function Component({ items }) {
+  const newItems = [...items, 'new'];
+  return <List items={newItems} />;
+}
+```
+
+## Integration with Existing Setup
+
+### With eslint-plugin-react-hooks
+
+Use both plugins together:
+
+```javascript eslint.config.mjs
+import reactHooks from 'eslint-plugin-react-hooks';
+import reactCompiler from 'eslint-plugin-react-compiler';
+
+export default [
+  {
+    plugins: {
+      'react-hooks': reactHooks,
+      'react-compiler': reactCompiler,
+    },
+    rules: {
+      'react-hooks/rules-of-hooks': 'error',
+      'react-hooks/exhaustive-deps': 'warn',
+      'react-compiler/react-compiler': 'error',
+    },
+  },
+];
+```
+
+### With TypeScript
+
+```javascript eslint.config.mjs
+import tseslint from '@typescript-eslint/eslint-plugin';
+import reactCompiler from 'eslint-plugin-react-compiler';
+
+export default [
+  {
+    files: ['**/*.ts', '**/*.tsx'],
+    plugins: {
+      '@typescript-eslint': tseslint,
+      'react-compiler': reactCompiler,
+    },
+    rules: {
+      'react-compiler/react-compiler': 'error',
+    },
+  },
+];
+```
+
+### File-Based Configuration
+
+```javascript eslint.config.mjs
+import reactCompiler from 'eslint-plugin-react-compiler';
+
+export default [
+  {
+    // Strict checking for new code
+    files: ['src/features/**/*.{js,jsx,ts,tsx}'],
+    rules: {
+      'react-compiler/react-compiler': 'error',
+    },
+  },
+  {
+    // Warnings for legacy code
+    files: ['src/legacy/**/*.{js,jsx,ts,tsx}'],
+    rules: {
+      'react-compiler/react-compiler': 'warn',
+    },
+  },
+];
+```
+
+## Editor Integration
+
+### VS Code
+
+Install the ESLint extension:
+
+1. Install [ESLint extension](https://marketplace.visualstudio.com/items?itemName=dbaeumer.vscode-eslint)
+2. Add to `.vscode/settings.json`:
+
+```json .vscode/settings.json
+{
+  "eslint.validate": [
+    "javascript",
+    "javascriptreact",
+    "typescript",
+    "typescriptreact"
+  ],
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": true
+  }
+}
+```
+
+### WebStorm / IntelliJ IDEA
+
+1. Go to **Settings → Languages & Frameworks → JavaScript → Code Quality Tools → ESLint**
+2. Enable "Automatic ESLint configuration"
+3. Set "Run eslint --fix on save"
+
+### Vim / Neovim
+
+Use ALE or coc-eslint:
+
+```vim .vimrc
+" ALE
+let g:ale_linters = {'javascript': ['eslint']}
+let g:ale_fixers = {'javascript': ['eslint']}
+
+" Or with coc.nvim
+" :CocInstall coc-eslint
+```
+
+## CI/CD Integration
+
+### GitHub Actions
+
+```yaml .github/workflows/lint.yml
+name: Lint
+
+on: [push, pull_request]
+
+jobs:
+  eslint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      - run: npm ci
+      - run: npm run lint
+```
+
+### GitLab CI
+
+```yaml .gitlab-ci.yml
+lint:
+  stage: test
+  image: node:18
+  script:
+    - npm ci
+    - npm run lint
+```
+
+### Pre-commit Hook
+
+Use `husky` and `lint-staged`:
+
+<CodeGroup>
+
+```json package.json
+{
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx}": "eslint --fix"
+  }
+}
+```
+
+```bash Install husky
+npm install --save-dev husky lint-staged
+npx husky init
+echo "npx lint-staged" > .husky/pre-commit
+```
+
+</CodeGroup>
+
+## Troubleshooting
+
+### "No files matching the pattern were found"
+
+Ensure your ESLint config includes the correct file patterns:
+
+```javascript eslint.config.mjs
+export default [
+  {
+    files: ['**/*.{js,jsx,ts,tsx}'],
+    // ...
+  },
+];
+```
+
+### "Failed to load plugin 'react-compiler'"
+
+Verify the plugin is installed:
+
+```bash
+npm list eslint-plugin-react-compiler
+```
+
+Reinstall if necessary:
+
+```bash
+npm install --save-dev eslint-plugin-react-compiler
+```
+
+### High Memory Usage
+
+For large codebases, increase Node memory:
+
+```json package.json
+{
+  "scripts": {
+    "lint": "NODE_OPTIONS='--max-old-space-size=4096' eslint ."
+  }
+}
+```
+
+### Slow Linting
+
+Use ESLint cache:
+
+```bash
+eslint --cache --cache-location node_modules/.cache/eslint .
+```
+
+Or in `package.json`:
+
+```json
+{
+  "scripts": {
+    "lint": "eslint --cache ."
+  }
+}
+```
+
+## Ignoring Violations
+
+### File-Level
+
+```javascript
+/* eslint-disable react-compiler/react-compiler */
+function LegacyComponent() {
+  // Non-compliant code
+}
+/* eslint-enable react-compiler/react-compiler */
+```
+
+### Line-Level
+
+```javascript
+function Component() {
+  // eslint-disable-next-line react-compiler/react-compiler
+  if (condition) useState(0);
+}
+```
+
+### .eslintignore
+
+```bash .eslintignore
+# Ignore legacy code
+src/legacy/
+
+# Ignore build output
+build/
+dist/
+
+# Ignore dependencies
+node_modules/
+```
+
+## Best Practices
+
+### Gradual Adoption
+
+1. Start with warnings:
+   ```javascript
+   rules: { 'react-compiler/react-compiler': 'warn' }
+   ```
+
+2. Fix violations incrementally
+
+3. Switch to errors:
+   ```javascript
+   rules: { 'react-compiler/react-compiler': 'error' }
+   ```
+
+### Team Workflow
+
+1. **Local Development**: Show warnings in editor
+2. **Pre-commit**: Block commits with errors
+3. **CI/CD**: Fail builds on errors
+4. **Code Review**: Require fixes before merge
+
+### Documentation
+
+Document exceptions:
+
+```javascript
+// eslint-disable-next-line react-compiler/react-compiler
+// Reason: Third-party library requires this pattern
+// TODO: Refactor when library v2.0 is available
+legacyAPI.method();
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Configuration" icon="sliders" href="/compiler/configuration">
+    Configure compiler validation options
+  </Card>
+  <Card title="Babel Plugin" icon="plug" href="/compiler/babel-plugin">
+    Set up code transformation
+  </Card>
+  <Card title="How It Works" icon="gear" href="/compiler/how-it-works">
+    Understand the validation process
+  </Card>
+  <Card title="Contributing" icon="code-pull-request" href="/compiler/contributing">
+    Contribute to the ESLint plugin
+  </Card>
+</CardGroup>

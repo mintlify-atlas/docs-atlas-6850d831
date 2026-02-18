@@ -1,0 +1,474 @@
+---
+title: StrictMode
+description: Enable additional development checks and warnings for component trees
+---
+
+`StrictMode` is a development tool for highlighting potential problems in an application. It activates additional checks and warnings for its descendants.
+
+<Note>
+`StrictMode` is **development-only** and has no effect in production builds. It doesn't render any visible UI and doesn't impact the user experience.
+</Note>
+
+## Usage
+
+```javascript
+import { StrictMode } from 'react';
+
+function App() {
+  return (
+    <StrictMode>
+      <div>
+        <Header />
+        <MainContent />
+        <Footer />
+      </div>
+    </StrictMode>
+  );
+}
+```
+
+### Type
+
+```typescript
+const StrictMode: symbol = Symbol.for('react.strict_mode')
+```
+
+Internally, `StrictMode` is represented by the symbol `Symbol.for('react.strict_mode')` (the value of `REACT_STRICT_MODE_TYPE` in React's source).
+
+## What StrictMode Checks
+
+`StrictMode` enables several development-only behaviors to help identify issues:
+
+### 1. Identifying Unsafe Lifecycles
+
+StrictMode warns about legacy lifecycle methods that are unsafe for async rendering:
+
+- `componentWillMount` → Use `componentDidMount` or `constructor`
+- `componentWillReceiveProps` → Use `getDerivedStateFromProps` or `componentDidUpdate`
+- `componentWillUpdate` → Use `getSnapshotBeforeUpdate` or `componentDidUpdate`
+
+```javascript
+class OldComponent extends React.Component {
+  // ⚠️ Warning in StrictMode
+  componentWillMount() {
+    this.fetchData();
+  }
+
+  // ✅ Safe alternative
+  componentDidMount() {
+    this.fetchData();
+  }
+}
+```
+
+### 2. Warning About Legacy String Refs
+
+String refs are deprecated and will warn in StrictMode:
+
+```javascript
+class MyComponent extends React.Component {
+  render() {
+    // ⚠️ Warning in StrictMode
+    return <input ref="myInput" />;
+  }
+}
+
+// ✅ Use callback refs or createRef() instead
+class MyComponent extends React.Component {
+  myRef = React.createRef();
+  
+  render() {
+    return <input ref={this.myRef} />;
+  }
+}
+```
+
+### 3. Detecting Unexpected Side Effects
+
+StrictMode double-invokes certain functions in development to help detect side effects:
+
+**Functions that are double-invoked:**
+
+- Function component bodies
+- `useState`, `useMemo`, and `useReducer` initializer functions
+- Class component `constructor`, `render`, and `shouldComponentUpdate` methods
+- `getDerivedStateFromProps` static method
+
+```javascript
+function Component() {
+  // This runs twice in development with StrictMode
+  console.log('Rendering'); // Logs twice
+  
+  const [state] = useState(() => {
+    // This initializer runs twice in development
+    console.log('Initializing state'); // Logs twice
+    return initialValue;
+  });
+  
+  return <div>{state}</div>;
+}
+```
+
+**Why double-invoke?**
+
+This helps catch bugs caused by impure functions. Pure functions should produce the same result when called multiple times, so calling them twice shouldn't cause issues. If your code breaks with double-invocation, it indicates a side effect that could cause bugs.
+
+```javascript
+let globalCounter = 0;
+
+function BuggyComponent() {
+  // ❌ Bug: side effect in render
+  globalCounter++; // This increments twice in StrictMode!
+  
+  return <div>Count: {globalCounter}</div>;
+}
+
+function FixedComponent() {
+  // ✅ Fixed: use state instead
+  const [count, setCount] = useState(0);
+  
+  return (
+    <div>
+      Count: {count}
+      <button onClick={() => setCount(c => c + 1)}>Increment</button>
+    </div>
+  );
+}
+```
+
+### 4. Detecting Legacy Context API
+
+StrictMode warns about usage of the legacy context API:
+
+```javascript
+class Provider extends React.Component {
+  // ⚠️ Warning in StrictMode
+  static childContextTypes = {
+    color: PropTypes.string
+  };
+  
+  getChildContext() {
+    return { color: 'purple' };
+  }
+}
+
+// ✅ Use modern Context API instead
+const ColorContext = React.createContext('purple');
+```
+
+### 5. Detecting Deprecated findDOMNode Usage
+
+`findDOMNode` is deprecated and will warn in StrictMode:
+
+```javascript
+import { findDOMNode } from 'react-dom';
+
+class MyComponent extends React.Component {
+  componentDidMount() {
+    // ⚠️ Warning in StrictMode
+    const node = findDOMNode(this);
+  }
+}
+
+// ✅ Use refs instead
+class MyComponent extends React.Component {
+  ref = React.createRef();
+  
+  componentDidMount() {
+    const node = this.ref.current;
+  }
+  
+  render() {
+    return <div ref={this.ref} />;
+  }
+}
+```
+
+### 6. Ensuring Reusable State (React 18+)
+
+In React 18+, StrictMode simulates mounting, unmounting, and remounting components to ensure state can be preserved:
+
+```javascript
+function Component() {
+  useEffect(() => {
+    console.log('Mount');
+    
+    return () => {
+      console.log('Unmount');
+    };
+  }, []);
+  
+  // In development with StrictMode:
+  // 1. Mount (logs "Mount")
+  // 2. Unmount (logs "Unmount")
+  // 3. Mount again (logs "Mount")
+  
+  return <div>Content</div>;
+}
+```
+
+This helps ensure your cleanup functions work correctly and your components can handle being mounted multiple times.
+
+## Enabling StrictMode
+
+### For Your Entire App
+
+Wrap your entire app in StrictMode:
+
+```javascript
+import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
+import App from './App';
+
+const root = createRoot(document.getElementById('root'));
+root.render(
+  <StrictMode>
+    <App />
+  </StrictMode>
+);
+```
+
+### For Part of Your App
+
+You can enable StrictMode for specific component trees:
+
+```javascript
+function App() {
+  return (
+    <div>
+      <Header /> {/* Not in StrictMode */}
+      
+      <StrictMode>
+        <MainContent /> {/* In StrictMode */}
+        <Sidebar />     {/* In StrictMode */}
+      </StrictMode>
+      
+      <Footer /> {/* Not in StrictMode */}
+    </div>
+  );
+}
+```
+
+### Nested StrictMode
+
+StrictMode can be nested, and inner StrictMode has no additional effect:
+
+```javascript
+function App() {
+  return (
+    <StrictMode>
+      <ComponentA />
+      <StrictMode>
+        <ComponentB /> {/* Still just StrictMode, not "double strict" */}
+      </StrictMode>
+    </StrictMode>
+  );
+}
+```
+
+## Common Issues and Fixes
+
+### Issue: My component is rendering twice!
+
+**This is intentional.** StrictMode double-invokes render functions in development to help catch bugs. This only happens in development mode.
+
+```javascript
+function Component() {
+  console.log('Render'); // Logs twice in dev, once in prod
+  return <div>Hello</div>;
+}
+```
+
+**What to do:** Ensure your render function is pure (no side effects). If you see issues, you've found a bug that StrictMode helped expose.
+
+### Issue: My useEffect is running twice on mount!
+
+**This is intentional in React 18+.** StrictMode simulates mounting, unmounting, and remounting:
+
+```javascript
+function Component() {
+  useEffect(() => {
+    console.log('Effect');
+    return () => console.log('Cleanup');
+  }, []);
+  
+  // Development logs:
+  // Effect
+  // Cleanup
+  // Effect
+  
+  // Production logs:
+  // Effect
+}
+```
+
+**What to do:** Ensure your effect cleanup functions work correctly. This prepares your code for features like Fast Refresh and component reuse.
+
+### Issue: setState in constructor/render is causing issues
+
+```javascript
+class BuggyComponent extends React.Component {
+  constructor(props) {
+    super(props);
+    // ❌ Don't call setState in constructor
+    this.setState({ data: [] }); // Causes issues with double-invoke
+  }
+}
+
+class FixedComponent extends React.Component {
+  // ✅ Initialize state directly
+  state = {
+    data: []
+  };
+}
+```
+
+### Issue: External API is being called twice
+
+```javascript
+function Component() {
+  const [data, setData] = useState(() => {
+    // ❌ API call in initializer - runs twice
+    return fetch('/api/data');
+  });
+}
+
+function FixedComponent() {
+  const [data, setData] = useState(null);
+  
+  useEffect(() => {
+    // ✅ API call in effect - still runs twice in StrictMode,
+    // but you can add cleanup to cancel the request
+    let cancelled = false;
+    
+    fetch('/api/data')
+      .then(result => {
+        if (!cancelled) {
+          setData(result);
+        }
+      });
+    
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+}
+```
+
+## StrictMode in Tests
+
+You can wrap your test components in StrictMode to get the same checks during testing:
+
+```javascript
+import { render } from '@testing-library/react';
+import { StrictMode } from 'react';
+
+test('my component', () => {
+  render(
+    <StrictMode>
+      <MyComponent />
+    </StrictMode>
+  );
+  
+  // ... assertions
+});
+```
+
+## Migration Strategy
+
+**If you're adding StrictMode to an existing app:**
+
+1. **Start small:** Wrap individual components or features first
+2. **Fix warnings:** Address StrictMode warnings as they appear
+3. **Expand gradually:** Move StrictMode up the tree as you fix issues
+4. **Eventually wrap the whole app:** Once all warnings are resolved
+
+```javascript
+// Phase 1: Wrap a single feature
+function App() {
+  return (
+    <div>
+      <Header />
+      <StrictMode>
+        <NewFeature /> {/* Start here */}
+      </StrictMode>
+      <Footer />
+    </div>
+  );
+}
+
+// Phase 2: Expand to more components
+function App() {
+  return (
+    <div>
+      <Header />
+      <StrictMode>
+        <NewFeature />
+        <MainContent /> {/* Add more */}
+      </StrictMode>
+      <Footer />
+    </div>
+  );
+}
+
+// Phase 3: Wrap entire app
+function App() {
+  return (
+    <StrictMode>
+      <div>
+        <Header />
+        <MainContent />
+        <Footer />
+      </div>
+    </StrictMode>
+  );
+}
+```
+
+## Benefits
+
+**Using StrictMode helps you:**
+
+- **Catch bugs early:** Find issues in development before users see them
+- **Write better code:** Encourages best practices and pure functions
+- **Future-proof your app:** Prepares your code for future React features
+- **Easier refactoring:** Helps identify code that will break with updates
+- **Better performance:** Helps identify unnecessary re-renders and side effects
+
+<Warning>
+Don't remove StrictMode just because it causes your component to render twice! This is catching real bugs. Fix the underlying issues instead.
+</Warning>
+
+## Example: Before and After StrictMode
+
+**Before (with bugs):**
+
+```javascript
+let globalUserId = null;
+
+function UserProfile({ userId }) {
+  // ❌ Bug: setting global variable in render
+  globalUserId = userId;
+  
+  return <div>User: {userId}</div>;
+}
+
+// Works in production but is buggy
+```
+
+**After (bug revealed and fixed):**
+
+```javascript
+function UserProfile({ userId }) {
+  // ✅ No side effects in render
+  return (
+    <div>
+      User: {userId}
+      <UserActions userId={userId} /> {/* Pass as prop */}
+    </div>
+  );
+}
+
+// StrictMode revealed the bug by making it obvious
+// that globalUserId was being set multiple times
+```

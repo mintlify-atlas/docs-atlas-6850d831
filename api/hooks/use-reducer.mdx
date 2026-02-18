@@ -1,0 +1,498 @@
+---
+title: useReducer
+description: Manage state with a reducer function for complex state logic
+---
+
+`useReducer` is a React Hook that lets you add a reducer to your component for managing complex state logic.
+
+```typescript
+function useReducer<S, I, A>(
+  reducer: (S, A) => S,
+  initialArg: I,
+  init?: I => S
+): [S, Dispatch<A>]
+```
+
+## Parameters
+
+<ParamField path="reducer" type="(state: S, action: A) => S" required>
+  The reducer function that specifies how the state gets updated. It must be pure, should take the state and action as arguments, and should return the next state. State and action can be of any types.
+</ParamField>
+
+<ParamField path="initialArg" type="I" required>
+  The value from which the initial state is calculated. It can be a value of any type. How the initial state is calculated from it depends on the `init` argument.
+</ParamField>
+
+<ParamField path="init" type="(initialArg: I) => S">
+  Optional initializer function. If provided, the initial state will be set to `init(initialArg)`. Otherwise, it's set to `initialArg`.
+  
+  This is useful when the initial state needs to be computed from props or when you want to extract the logic for resetting state.
+</ParamField>
+
+## Returns
+
+`useReducer` returns an array with exactly two values:
+
+<ResponseField name="[0]" type="S">
+  The current state. During the first render, it's set to `init(initialArg)` or `initialArg` (if no `init` function).
+</ResponseField>
+
+<ResponseField name="[1]" type="Dispatch<A>">
+  The `dispatch` function that lets you update the state to a different value and trigger a re-render.
+  
+  The dispatch function accepts an action object and has no return value.
+</ResponseField>
+
+## Usage
+
+### Basic counter with reducer
+
+```javascript
+import { useReducer } from 'react';
+
+function reducer(state, action) {
+  switch (action.type) {
+    case 'increment':
+      return { count: state.count + 1 };
+    case 'decrement':
+      return { count: state.count - 1 };
+    default:
+      throw new Error('Unknown action type');
+  }
+}
+
+function Counter() {
+  const [state, dispatch] = useReducer(reducer, { count: 0 });
+  
+  return (
+    <>
+      Count: {state.count}
+      <button onClick={() => dispatch({ type: 'increment' })}>+</button>
+      <button onClick={() => dispatch({ type: 'decrement' })}>-</button>
+    </>
+  );
+}
+```
+
+### Todo list with reducer
+
+```javascript
+function todosReducer(state, action) {
+  switch (action.type) {
+    case 'added':
+      return [
+        ...state,
+        {
+          id: action.id,
+          text: action.text,
+          done: false
+        }
+      ];
+    case 'changed':
+      return state.map(t => {
+        if (t.id === action.todo.id) {
+          return action.todo;
+        } else {
+          return t;
+        }
+      });
+    case 'deleted':
+      return state.filter(t => t.id !== action.id);
+    default:
+      throw new Error('Unknown action: ' + action.type);
+  }
+}
+
+function TodoList() {
+  const [todos, dispatch] = useReducer(todosReducer, []);
+  
+  function handleAddTodo(text) {
+    dispatch({
+      type: 'added',
+      id: nextId++,
+      text: text
+    });
+  }
+  
+  function handleChangeTodo(todo) {
+    dispatch({
+      type: 'changed',
+      todo: todo
+    });
+  }
+  
+  function handleDeleteTodo(todoId) {
+    dispatch({
+      type: 'deleted',
+      id: todoId
+    });
+  }
+  
+  return (
+    <>
+      <AddTodo onAddTodo={handleAddTodo} />
+      <TodoItems
+        todos={todos}
+        onChangeTodo={handleChangeTodo}
+        onDeleteTodo={handleDeleteTodo}
+      />
+    </>
+  );
+}
+```
+
+### Using the init function
+
+```javascript
+function createInitialState(username) {
+  return {
+    username,
+    todos: loadTodosFromStorage(username)
+  };
+}
+
+function reducer(state, action) {
+  switch (action.type) {
+    case 'reset':
+      return createInitialState(action.username);
+    // ... other actions
+  }
+}
+
+function TodoApp({ username }) {
+  const [state, dispatch] = useReducer(
+    reducer,
+    username,
+    createInitialState
+  );
+  
+  // Now you can reset state:
+  function handleReset() {
+    dispatch({ type: 'reset', username });
+  }
+}
+```
+
+## When to use useReducer
+
+<Tabs>
+  <Tab title="Use useState">
+    ```javascript
+    // Simple state updates
+    const [count, setCount] = useState(0);
+    const [name, setName] = useState('');
+    
+    // Independent state variables
+    const [firstName, setFirstName] = useState('');
+    const [lastName, setLastName] = useState('');
+    ```
+  </Tab>
+  <Tab title="Use useReducer">
+    ```javascript
+    // Complex state logic
+    const [state, dispatch] = useReducer(reducer, initialState);
+    
+    // Multiple related state updates
+    dispatch({ type: 'userLoggedIn', user, timestamp });
+    
+    // State depends on previous state in complex ways
+    dispatch({ type: 'complexUpdate', payload });
+    ```
+  </Tab>
+</Tabs>
+
+Use `useReducer` when:
+- You have complex state logic with multiple sub-values
+- The next state depends on the previous one
+- You want to optimize performance by passing dispatch down instead of callbacks
+- You prefer having all state update logic in one place
+
+## Common Patterns
+
+### Action with payload
+
+```javascript
+function reducer(state, action) {
+  switch (action.type) {
+    case 'set_name':
+      return { ...state, name: action.payload };
+    case 'set_age':
+      return { ...state, age: action.payload };
+    default:
+      return state;
+  }
+}
+
+// Usage
+dispatch({ type: 'set_name', payload: 'Alice' });
+dispatch({ type: 'set_age', payload: 30 });
+```
+
+### Reducer with multiple fields
+
+```javascript
+function formReducer(state, action) {
+  switch (action.type) {
+    case 'changed_field':
+      return {
+        ...state,
+        [action.field]: action.value
+      };
+    case 'reset':
+      return action.initialState;
+    default:
+      throw new Error('Unknown action: ' + action.type);
+  }
+}
+
+function Form() {
+  const [form, dispatch] = useReducer(formReducer, {
+    name: '',
+    email: '',
+    age: 0
+  });
+  
+  function handleChange(field, value) {
+    dispatch({
+      type: 'changed_field',
+      field: field,
+      value: value
+    });
+  }
+  
+  return (
+    <>
+      <input
+        value={form.name}
+        onChange={e => handleChange('name', e.target.value)}
+      />
+      <input
+        value={form.email}
+        onChange={e => handleChange('email', e.target.value)}
+      />
+    </>
+  );
+}
+```
+
+### Combining with Context
+
+```javascript
+import { createContext, useReducer, useContext } from 'react';
+
+const TodosContext = createContext(null);
+const TodosDispatchContext = createContext(null);
+
+export function TodosProvider({ children }) {
+  const [todos, dispatch] = useReducer(todosReducer, []);
+  
+  return (
+    <TodosContext.Provider value={todos}>
+      <TodosDispatchContext.Provider value={dispatch}>
+        {children}
+      </TodosDispatchContext.Provider>
+    </TodosContext.Provider>
+  );
+}
+
+export function useTodos() {
+  return useContext(TodosContext);
+}
+
+export function useTodosDispatch() {
+  return useContext(TodosDispatchContext);
+}
+
+// Usage in components
+function AddTodo() {
+  const dispatch = useTodosDispatch();
+  
+  function handleClick() {
+    dispatch({
+      type: 'added',
+      id: nextId++,
+      text: 'New todo'
+    });
+  }
+  
+  return <button onClick={handleClick}>Add</button>;
+}
+```
+
+### Immer for immutable updates
+
+```javascript
+import { useReducer } from 'react';
+import { produce } from 'immer';
+
+function reducer(state, action) {
+  return produce(state, draft => {
+    switch (action.type) {
+      case 'added_todo':
+        draft.push({
+          id: action.id,
+          text: action.text,
+          done: false
+        });
+        break;
+      case 'toggled_todo':
+        const todo = draft.find(t => t.id === action.id);
+        todo.done = !todo.done;
+        break;
+      case 'deleted_todo':
+        return draft.filter(t => t.id !== action.id);
+    }
+  });
+}
+```
+
+## TypeScript
+
+```typescript
+import { useReducer } from 'react';
+
+// Define state and action types
+type State = {
+  count: number;
+  error: string | null;
+};
+
+type Action =
+  | { type: 'increment' }
+  | { type: 'decrement' }
+  | { type: 'reset'; payload: number }
+  | { type: 'set_error'; payload: string };
+
+function reducer(state: State, action: Action): State {
+  switch (action.type) {
+    case 'increment':
+      return { ...state, count: state.count + 1 };
+    case 'decrement':
+      return { ...state, count: state.count - 1 };
+    case 'reset':
+      return { ...state, count: action.payload };
+    case 'set_error':
+      return { ...state, error: action.payload };
+  }
+}
+
+function Counter() {
+  const [state, dispatch] = useReducer(reducer, {
+    count: 0,
+    error: null
+  });
+  
+  // TypeScript will check action types
+  dispatch({ type: 'increment' }); // ✅ OK
+  dispatch({ type: 'reset', payload: 0 }); // ✅ OK
+  // dispatch({ type: 'reset' }); // ❌ Error: missing payload
+  // dispatch({ type: 'unknown' }); // ❌ Error: invalid type
+  
+  return <div>{state.count}</div>;
+}
+```
+
+### With discriminated unions
+
+```typescript
+type Todo = {
+  id: number;
+  text: string;
+  done: boolean;
+};
+
+type TodoAction =
+  | { type: 'added'; id: number; text: string }
+  | { type: 'changed'; todo: Todo }
+  | { type: 'deleted'; id: number };
+
+function todosReducer(todos: Todo[], action: TodoAction): Todo[] {
+  switch (action.type) {
+    case 'added':
+      return [
+        ...todos,
+        {
+          id: action.id,
+          text: action.text,
+          done: false
+        }
+      ];
+    case 'changed':
+      return todos.map(t => (t.id === action.todo.id ? action.todo : t));
+    case 'deleted':
+      return todos.filter(t => t.id !== action.id);
+  }
+}
+```
+
+## Troubleshooting
+
+### My reducer state shows the old value
+
+State updates are asynchronous. The updated value will be available in the next render:
+
+```javascript
+function handleClick() {
+  dispatch({ type: 'increment' });
+  console.log(state.count); // Still shows old value!
+}
+```
+
+### My reducer doesn't update the UI
+
+Make sure you're returning a new state object, not mutating the existing one:
+
+```javascript
+// ❌ Mutating state
+function reducer(state, action) {
+  state.count++; // Don't mutate!
+  return state; // Same object reference
+}
+
+// ✅ Creating new state
+function reducer(state, action) {
+  return {
+    ...state,
+    count: state.count + 1
+  };
+}
+```
+
+### Dispatch is causing too many re-renders
+
+Make sure you're not calling dispatch during render:
+
+```javascript
+function Component() {
+  const [state, dispatch] = useReducer(reducer, initialState);
+  
+  // ❌ Don't dispatch during render
+  dispatch({ type: 'something' }); // Infinite loop!
+  
+  // ✅ Dispatch in event handler or effect
+  function handleClick() {
+    dispatch({ type: 'something' });
+  }
+  
+  return <button onClick={handleClick}>Click</button>;
+}
+```
+
+### My reducer is getting complex
+
+Consider:
+- Breaking it into multiple smaller reducers
+- Using a state management library (Redux, Zustand, Jotai)
+- Moving some logic into custom hooks
+- Using Immer for simpler immutable updates
+
+## useState vs useReducer
+
+| Feature | useState | useReducer |
+|---------|----------|------------|
+| Complexity | Simple state | Complex state logic |
+| Update logic | Inline | Centralized in reducer |
+| Testability | Test components | Test reducer separately |
+| Performance | Good for simple state | Better for complex updates |
+| Dispatch | Multiple setters | Single dispatch |
+| Context | Pass setters | Pass dispatch |

@@ -1,0 +1,434 @@
+---
+title: Conditional Rendering
+description: Learn how to conditionally display different UI elements in React based on state and props
+---
+
+# Conditional Rendering
+
+Your components often need to display different content based on conditions. In React, you can conditionally render JSX using JavaScript syntax like `if` statements, `&&`, and ternary operators.
+
+## Conditionally Returning JSX
+
+The simplest way to conditionally render is to return early:
+
+```jsx
+function LoginMessage({ isLoggedIn, username }) {
+  if (isLoggedIn) {
+    return <h1>Welcome back, {username}!</h1>;
+  }
+  return <h1>Please sign in.</h1>;
+}
+```
+
+### Returning Nothing
+
+Return `null` to render nothing:
+
+```jsx
+function ErrorMessage({ error }) {
+  if (!error) {
+    return null; // Don't render anything
+  }
+
+  return (
+    <div className="error">
+      <strong>Error:</strong> {error}
+    </div>
+  );
+}
+```
+
+<Note>
+**Important:** Returning `null`, `undefined`, `true`, or `false` from a component renders nothing. However, these values behave differently inside JSX expressions.
+</Note>
+
+## Ternary Operator
+
+Use the ternary operator (`? :`) for inline conditional rendering:
+
+```jsx
+function UserStatus({ isOnline }) {
+  return (
+    <div>
+      <span className={isOnline ? 'status-online' : 'status-offline'}>
+        {isOnline ? '🟢 Online' : '🔴 Offline'}
+      </span>
+    </div>
+  );
+}
+```
+
+### Nested Ternaries
+
+```jsx
+function Badge({ count }) {
+  return (
+    <div className="badge">
+      {count === 0 
+        ? 'No notifications'
+        : count === 1
+        ? '1 notification'
+        : `${count} notifications`
+      }
+    </div>
+  );
+}
+```
+
+<Note>
+**Readability tip:** Deeply nested ternaries can be hard to read. Consider using `if` statements or extracting logic into a function if you have more than 2 levels.
+</Note>
+
+## Logical AND Operator (&&)
+
+Use `&&` to render something only when a condition is true:
+
+```jsx
+function Notifications({ messages }) {
+  return (
+    <div>
+      <h1>Inbox</h1>
+      {messages.length > 0 && (
+        <p>You have {messages.length} unread messages.</p>
+      )}
+    </div>
+  );
+}
+```
+
+### How && Works in JSX
+
+```jsx
+function Example({ show, count }) {
+  return (
+    <div>
+      {/* ✅ Correct - renders "Hello" or nothing */}
+      {show && <p>Hello</p>}
+
+      {/* ❌ Wrong - renders 0 when count is 0! */}
+      {count && <p>{count} items</p>}
+
+      {/* ✅ Correct - explicit boolean check */}
+      {count > 0 && <p>{count} items</p>}
+    </div>
+  );
+}
+```
+
+<Note>
+**Gotcha:** The left side of `&&` is rendered if it's a falsy number like `0`. Always use boolean conditions:
+- ✅ `isReady && <Component />`
+- ✅ `count > 0 && <Component />`
+- ❌ `count && <Component />` (renders 0 when count is 0)
+</Note>
+
+## If/Else in JSX
+
+You can't use `if/else` directly in JSX, but you can use it before the return:
+
+```jsx
+function Dashboard({ user }) {
+  let content;
+  
+  if (user.role === 'admin') {
+    content = <AdminPanel />;
+  } else if (user.role === 'moderator') {
+    content = <ModeratorPanel />;
+  } else {
+    content = <UserPanel />;
+  }
+
+  return (
+    <div>
+      <h1>Dashboard</h1>
+      {content}
+    </div>
+  );
+}
+```
+
+### Using IIFE (Immediately Invoked Function Expression)
+
+```jsx
+function StatusIcon({ status }) {
+  return (
+    <div>
+      {(() => {
+        switch (status) {
+          case 'success':
+            return <span>✅ Success</span>;
+          case 'error':
+            return <span>❌ Error</span>;
+          case 'warning':
+            return <span>⚠️ Warning</span>;
+          default:
+            return <span>ℹ️ Info</span>;
+        }
+      })()}
+    </div>
+  );
+}
+```
+
+## Multiple Conditions
+
+Handle complex conditional logic with multiple conditions:
+
+```jsx
+function MessageList({ messages, isLoading, error }) {
+  if (error) {
+    return <div className="error">Error: {error}</div>;
+  }
+
+  if (isLoading) {
+    return <div className="loading">Loading messages...</div>;
+  }
+
+  if (messages.length === 0) {
+    return <div className="empty">No messages yet.</div>;
+  }
+
+  return (
+    <ul>
+      {messages.map(message => (
+        <li key={message.id}>{message.text}</li>
+      ))}
+    </ul>
+  );
+}
+```
+
+## Conditional Attributes
+
+Conditionally set element attributes:
+
+```jsx
+function Button({ isPrimary, isDisabled, children }) {
+  return (
+    <button
+      className={`btn ${isPrimary ? 'btn-primary' : 'btn-secondary'}`}
+      disabled={isDisabled}
+      aria-disabled={isDisabled ? 'true' : 'false'}
+    >
+      {children}
+    </button>
+  );
+}
+```
+
+### Conditional Class Names
+
+```jsx
+function Card({ isActive, isHighlighted, hasError }) {
+  const classNames = [
+    'card',
+    isActive && 'card-active',
+    isHighlighted && 'card-highlighted',
+    hasError && 'card-error'
+  ].filter(Boolean).join(' ');
+
+  return <div className={classNames}>Card content</div>;
+}
+
+// Or using template literals
+function Card({ isActive, isHighlighted }) {
+  return (
+    <div className={`
+      card
+      ${isActive ? 'card-active' : ''}
+      ${isHighlighted ? 'card-highlighted' : ''}
+    `.trim()}>
+      Card content
+    </div>
+  );
+}
+```
+
+## Extracting Conditional Logic
+
+For complex conditions, extract into helper functions:
+
+```jsx
+function canUserEdit(user, post) {
+  return user.id === post.authorId || user.role === 'admin';
+}
+
+function canUserDelete(user, post) {
+  return user.role === 'admin' || 
+         (user.id === post.authorId && post.createdAt > Date.now() - 3600000);
+}
+
+function PostActions({ user, post }) {
+  return (
+    <div className="actions">
+      {canUserEdit(user, post) && (
+        <button>Edit</button>
+      )}
+      {canUserDelete(user, post) && (
+        <button>Delete</button>
+      )}
+    </div>
+  );
+}
+```
+
+## Conditional Rendering with State
+
+Combine conditional rendering with state for interactive UIs:
+
+```jsx
+import { useState } from 'react';
+
+function Accordion({ title, children }) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <div className="accordion">
+      <button 
+        onClick={() => setIsOpen(!isOpen)}
+        className="accordion-header"
+      >
+        {title}
+        <span>{isOpen ? '▼' : '▶'}</span>
+      </button>
+      
+      {isOpen && (
+        <div className="accordion-content">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+```
+
+## Complete Authentication Example
+
+<Steps>
+
+### Define component with multiple states
+
+```jsx
+import { useState } from 'react';
+
+function AuthPage() {
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [user, setUser] = useState(null);
+```
+
+### Handle authentication logic
+
+```jsx
+  const handleLogin = async (credentials) => {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      const response = await fetch('/api/login', {
+        method: 'POST',
+        body: JSON.stringify(credentials)
+      });
+      
+      if (!response.ok) throw new Error('Login failed');
+      
+      const userData = await response.json();
+      setUser(userData);
+      setIsLoggedIn(true);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+```
+
+### Render conditionally based on state
+
+```jsx
+  // Show loading state
+  if (isLoading) {
+    return (
+      <div className="auth-page">
+        <div className="spinner">Loading...</div>
+      </div>
+    );
+  }
+
+  // Show logged in state
+  if (isLoggedIn && user) {
+    return (
+      <div className="auth-page">
+        <h1>Welcome, {user.name}!</h1>
+        <p>Email: {user.email}</p>
+        {user.isAdmin && (
+          <div className="admin-badge">Admin Access</div>
+        )}
+        <button onClick={() => setIsLoggedIn(false)}>
+          Logout
+        </button>
+      </div>
+    );
+  }
+
+  // Show login form
+  return (
+    <div className="auth-page">
+      <h1>Login</h1>
+      {error && (
+        <div className="error-message">{error}</div>
+      )}
+      <LoginForm onSubmit={handleLogin} />
+    </div>
+  );
+}
+```
+
+</Steps>
+
+## Pattern Comparison
+
+Choose the right pattern for your use case:
+
+```jsx
+function ComparisonExample({ show, count, status }) {
+  return (
+    <div>
+      {/* Early return - best for component-level conditions */}
+      {!show && null}
+
+      {/* Ternary - best for either/or scenarios */}
+      {status === 'active' ? <ActiveBadge /> : <InactiveBadge />}
+
+      {/* && operator - best for showing/hiding single elements */}
+      {count > 0 && <NotificationBadge count={count} />}
+
+      {/* Variable assignment - best for complex multi-condition logic */}
+      {(() => {
+        let content;
+        if (status === 'loading') content = <Spinner />;
+        else if (status === 'error') content = <ErrorMessage />;
+        else content = <DataDisplay />;
+        return content;
+      })()}
+    </div>
+  );
+}
+```
+
+## Best Practices
+
+<Note>
+**Guidelines for conditional rendering:**
+- Use early returns for component-level conditions
+- Use `&&` for simple show/hide logic (with boolean conditions)
+- Use ternary for either/or scenarios  
+- Extract complex conditions into helper functions
+- Avoid deeply nested ternaries
+- Be careful with falsy values (especially `0`) with `&&`
+</Note>
+
+## Next Steps
+
+Now that you can conditionally render UI, learn how to [render lists of data](/guides/lists-and-keys) efficiently.

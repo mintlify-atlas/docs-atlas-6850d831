@@ -1,0 +1,467 @@
+---
+title: Managing State
+description: Learn how to add and update state in React components to make them interactive and dynamic
+---
+
+# Managing State
+
+State is a component's memory. It allows components to remember information and respond to user interactions by re-rendering with updated data.
+
+## When to Use State
+
+Use state when a component needs to "remember" something that changes over time:
+
+- ✅ Form input values
+- ✅ Whether a modal is open or closed
+- ✅ The currently selected tab
+- ✅ Data fetched from an API
+- ✅ Items in a shopping cart
+
+<Note>
+**Not everything needs to be state!** If you can calculate something from props or existing state, don't make it a separate state variable.
+</Note>
+
+## Using useState
+
+The `useState` Hook lets you add state to functional components:
+
+```jsx
+import { useState } from 'react';
+
+function Counter() {
+  const [count, setCount] = useState(0);
+
+  return (
+    <div>
+      <p>Count: {count}</p>
+      <button onClick={() => setCount(count + 1)}>
+        Increment
+      </button>
+    </div>
+  );
+}
+```
+
+### useState Basics
+
+<Steps>
+
+### Import useState
+
+```jsx
+import { useState } from 'react';
+```
+
+### Declare state variable
+
+```jsx
+const [count, setCount] = useState(0);
+//     ^       ^            ^
+//     |       |            initial value
+//     |       setter function
+//     current value
+```
+
+### Use state in JSX
+
+```jsx
+<p>Count: {count}</p>
+```
+
+### Update state
+
+```jsx
+<button onClick={() => setCount(count + 1)}>
+  Increment
+</button>
+```
+
+</Steps>
+
+## State Updates
+
+Calling a setter function tells React to re-render the component with the new value:
+
+```jsx
+function Toggle() {
+  const [isOn, setIsOn] = useState(false);
+
+  const handleToggle = () => {
+    setIsOn(!isOn); // Toggle between true and false
+  };
+
+  return (
+    <div>
+      <p>The switch is {isOn ? 'ON' : 'OFF'}</p>
+      <button onClick={handleToggle}>
+        Toggle
+      </button>
+    </div>
+  );
+}
+```
+
+<Note>
+**State updates are asynchronous!** React batches multiple state updates for performance. Don't rely on the state value immediately after calling the setter.
+</Note>
+
+### Functional Updates
+
+When the new state depends on the previous state, use a function:
+
+```jsx
+function Counter() {
+  const [count, setCount] = useState(0);
+
+  const handleIncrement = () => {
+    // ✅ Correct - uses previous value
+    setCount(prevCount => prevCount + 1);
+  };
+
+  const handleIncrementTwice = () => {
+    // ❌ Wrong - both use the same current value
+    setCount(count + 1);
+    setCount(count + 1); // Still adds just 1!
+
+    // ✅ Correct - each uses the updated value
+    setCount(c => c + 1);
+    setCount(c => c + 1); // Adds 2!
+  };
+
+  return (
+    <div>
+      <p>Count: {count}</p>
+      <button onClick={handleIncrement}>+1</button>
+      <button onClick={handleIncrementTwice}>+2</button>
+    </div>
+  );
+}
+```
+
+## State Immutability
+
+Never modify state directly. Always create new values:
+
+### Updating Objects
+
+```jsx
+function UserProfile() {
+  const [user, setUser] = useState({
+    name: 'Alice',
+    age: 30,
+    email: 'alice@example.com'
+  });
+
+  const handleUpdateEmail = (newEmail) => {
+    // ❌ Wrong - mutates state directly
+    user.email = newEmail;
+    setUser(user);
+
+    // ✅ Correct - creates new object
+    setUser({
+      ...user,
+      email: newEmail
+    });
+  };
+
+  const handleBirthday = () => {
+    // ✅ Correct - spread existing properties, update one
+    setUser(prevUser => ({
+      ...prevUser,
+      age: prevUser.age + 1
+    }));
+  };
+
+  return (
+    <div>
+      <p>Name: {user.name}</p>
+      <p>Age: {user.age}</p>
+      <p>Email: {user.email}</p>
+      <button onClick={handleBirthday}>Birthday</button>
+    </div>
+  );
+}
+```
+
+### Updating Arrays
+
+```jsx
+function TodoList() {
+  const [todos, setTodos] = useState(['Learn React', 'Build app']);
+
+  const handleAddTodo = (text) => {
+    // ❌ Wrong - push mutates the array
+    todos.push(text);
+    setTodos(todos);
+
+    // ✅ Correct - create new array
+    setTodos([...todos, text]);
+    // or
+    setTodos(prevTodos => [...prevTodos, text]);
+  };
+
+  const handleRemoveTodo = (index) => {
+    // ✅ Correct - filter creates new array
+    setTodos(todos.filter((_, i) => i !== index));
+  };
+
+  const handleUpdateTodo = (index, newText) => {
+    // ✅ Correct - map creates new array
+    setTodos(todos.map((todo, i) => 
+      i === index ? newText : todo
+    ));
+  };
+
+  return (
+    <ul>
+      {todos.map((todo, index) => (
+        <li key={index}>
+          {todo}
+          <button onClick={() => handleRemoveTodo(index)}>Delete</button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+```
+
+### Updating Nested Objects
+
+```jsx
+function UserSettings() {
+  const [user, setUser] = useState({
+    name: 'Alice',
+    preferences: {
+      theme: 'dark',
+      notifications: true
+    }
+  });
+
+  const handleThemeChange = (newTheme) => {
+    // ✅ Correct - spread at each level
+    setUser({
+      ...user,
+      preferences: {
+        ...user.preferences,
+        theme: newTheme
+      }
+    });
+  };
+
+  return (
+    <div>
+      <p>Theme: {user.preferences.theme}</p>
+      <button onClick={() => handleThemeChange('light')}>
+        Switch to Light
+      </button>
+    </div>
+  );
+}
+```
+
+## Multiple State Variables
+
+You can use `useState` multiple times in a component:
+
+```jsx
+function Form() {
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [age, setAge] = useState(0);
+  const [agreed, setAgreed] = useState(false);
+
+  return (
+    <form>
+      <input 
+        value={name} 
+        onChange={(e) => setName(e.target.value)}
+        placeholder="Name"
+      />
+      <input 
+        value={email} 
+        onChange={(e) => setEmail(e.target.value)}
+        placeholder="Email"
+      />
+      <input 
+        type="number"
+        value={age} 
+        onChange={(e) => setAge(Number(e.target.value))}
+      />
+      <label>
+        <input 
+          type="checkbox"
+          checked={agreed} 
+          onChange={(e) => setAgreed(e.target.checked)}
+        />
+        I agree to terms
+      </label>
+    </form>
+  );
+}
+```
+
+### When to Group State
+
+```jsx
+// ✅ Good - related values grouped
+const [user, setUser] = useState({
+  name: '',
+  email: ''
+});
+
+// ✅ Also good - independent values separate
+const [name, setName] = useState('');
+const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+// ❌ Avoid - unrelated values grouped
+const [stuff, setStuff] = useState({
+  userName: '',
+  cartItems: [],
+  isModalOpen: false
+});
+```
+
+## Lifting State Up
+
+When multiple components need to share state, move it to their common parent:
+
+```jsx
+function TemperatureInput({ temperature, onTemperatureChange, scale }) {
+  return (
+    <div>
+      <label>Temperature in {scale}:</label>
+      <input
+        type="number"
+        value={temperature}
+        onChange={(e) => onTemperatureChange(e.target.value)}
+      />
+    </div>
+  );
+}
+
+function BoilingVerdict({ celsius }) {
+  if (celsius >= 100) {
+    return <p>The water would boil.</p>;
+  }
+  return <p>The water would not boil.</p>;
+}
+
+function Calculator() {
+  const [temperature, setTemperature] = useState('');
+  const [scale, setScale] = useState('c');
+
+  const handleCelsiusChange = (temp) => {
+    setScale('c');
+    setTemperature(temp);
+  };
+
+  const handleFahrenheitChange = (temp) => {
+    setScale('f');
+    setTemperature(temp);
+  };
+
+  const celsius = scale === 'f' 
+    ? ((temperature - 32) * 5) / 9 
+    : temperature;
+
+  return (
+    <div>
+      <TemperatureInput
+        scale="Celsius"
+        temperature={scale === 'c' ? temperature : ''}
+        onTemperatureChange={handleCelsiusChange}
+      />
+      <TemperatureInput
+        scale="Fahrenheit"
+        temperature={scale === 'f' ? temperature : ''}
+        onTemperatureChange={handleFahrenheitChange}
+      />
+      <BoilingVerdict celsius={parseFloat(celsius)} />
+    </div>
+  );
+}
+```
+
+## Complete Shopping Cart Example
+
+```jsx
+import { useState } from 'react';
+
+function ShoppingCart() {
+  const [items, setItems] = useState([]);
+  const [inputValue, setInputValue] = useState('');
+
+  const handleAddItem = (e) => {
+    e.preventDefault();
+    if (inputValue.trim()) {
+      setItems([
+        ...items,
+        { id: Date.now(), name: inputValue, quantity: 1 }
+      ]);
+      setInputValue('');
+    }
+  };
+
+  const handleRemoveItem = (id) => {
+    setItems(items.filter(item => item.id !== id));
+  };
+
+  const handleUpdateQuantity = (id, delta) => {
+    setItems(items.map(item => {
+      if (item.id === id) {
+        const newQuantity = item.quantity + delta;
+        return newQuantity > 0 
+          ? { ...item, quantity: newQuantity }
+          : item;
+      }
+      return item;
+    }));
+  };
+
+  const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);
+
+  return (
+    <div>
+      <h2>Shopping Cart ({totalItems} items)</h2>
+      
+      <form onSubmit={handleAddItem}>
+        <input
+          value={inputValue}
+          onChange={(e) => setInputValue(e.target.value)}
+          placeholder="Add item..."
+        />
+        <button type="submit">Add</button>
+      </form>
+
+      <ul>
+        {items.map(item => (
+          <li key={item.id}>
+            <span>{item.name}</span>
+            <button onClick={() => handleUpdateQuantity(item.id, -1)}>-</button>
+            <span>{item.quantity}</span>
+            <button onClick={() => handleUpdateQuantity(item.id, 1)}>+</button>
+            <button onClick={() => handleRemoveItem(item.id)}>Remove</button>
+          </li>
+        ))}
+      </ul>
+
+      {items.length === 0 && <p>Your cart is empty</p>}
+    </div>
+  );
+}
+```
+
+## Best Practices
+
+<Note>
+**Key principles:**
+- Keep state minimal - derive values when possible
+- Don't duplicate data between state and props
+- Avoid deeply nested state structures
+- Group related state together
+- Lift state up when components need to share it
+</Note>
+
+## Next Steps
+
+Now that you understand state, learn how to [conditionally render](/guides/conditional-rendering) different UI based on state values.

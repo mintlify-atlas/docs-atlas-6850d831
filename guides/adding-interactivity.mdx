@@ -1,0 +1,437 @@
+---
+title: Adding Interactivity
+description: Learn how to handle user interactions with event handlers in React
+---
+
+# Adding Interactivity
+
+React lets you add event handlers to your JSX. Event handlers are functions that execute in response to user interactions like clicking, hovering, or typing.
+
+## Event Handlers
+
+To add an event handler, define a function and pass it as a prop to the appropriate JSX element:
+
+```jsx
+function Button() {
+  function handleClick() {
+    alert('Button clicked!');
+  }
+
+  return (
+    <button onClick={handleClick}>
+      Click me
+    </button>
+  );
+}
+```
+
+<Note>
+**Common mistake:** Don't call the function when passing it!
+- ✅ Correct: `onClick={handleClick}`
+- ❌ Wrong: `onClick={handleClick()}` (calls immediately)
+</Note>
+
+### Inline Event Handlers
+
+For simple handlers, you can define them inline:
+
+```jsx
+function Button() {
+  return (
+    <button onClick={() => alert('Clicked!')}>
+      Click me
+    </button>
+  );
+}
+```
+
+## Common Event Types
+
+React supports all standard DOM events. Here are the most commonly used:
+
+### Click Events
+
+```jsx
+function ClickExample() {
+  const handleClick = () => {
+    console.log('Single click');
+  };
+
+  const handleDoubleClick = () => {
+    console.log('Double click');
+  };
+
+  return (
+    <div>
+      <button onClick={handleClick}>Single Click</button>
+      <button onDoubleClick={handleDoubleClick}>Double Click</button>
+    </div>
+  );
+}
+```
+
+### Input Events
+
+```jsx
+function InputExample() {
+  const handleChange = (event) => {
+    console.log('Input value:', event.target.value);
+  };
+
+  const handleFocus = () => {
+    console.log('Input focused');
+  };
+
+  const handleBlur = () => {
+    console.log('Input blurred');
+  };
+
+  return (
+    <input
+      type="text"
+      onChange={handleChange}
+      onFocus={handleFocus}
+      onBlur={handleBlur}
+      placeholder="Type something..."
+    />
+  );
+}
+```
+
+### Mouse Events
+
+```jsx
+function MouseExample() {
+  return (
+    <div
+      onMouseEnter={() => console.log('Mouse entered')}
+      onMouseLeave={() => console.log('Mouse left')}
+      onMouseMove={(e) => console.log(`Position: ${e.clientX}, ${e.clientY}`)}
+      style={{ padding: '20px', border: '1px solid black' }}
+    >
+      Hover over me!
+    </div>
+  );
+}
+```
+
+### Keyboard Events
+
+```jsx
+function KeyboardExample() {
+  const handleKeyDown = (event) => {
+    if (event.key === 'Enter') {
+      console.log('Enter pressed!');
+    }
+    if (event.key === 'Escape') {
+      console.log('Escape pressed!');
+    }
+  };
+
+  return (
+    <input
+      type="text"
+      onKeyDown={handleKeyDown}
+      placeholder="Press Enter or Escape"
+    />
+  );
+}
+```
+
+## The Event Object
+
+Event handlers receive an event object as their first argument:
+
+```jsx
+function EventObjectExample() {
+  const handleClick = (event) => {
+    console.log('Event type:', event.type);
+    console.log('Target element:', event.target);
+    console.log('Click coordinates:', event.clientX, event.clientY);
+  };
+
+  const handleSubmit = (event) => {
+    event.preventDefault(); // Prevent form submission
+    console.log('Form submitted!');
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <button type="button" onClick={handleClick}>
+        Click for event info
+      </button>
+      <button type="submit">Submit</button>
+    </form>
+  );
+}
+```
+
+### Useful Event Properties
+
+- `event.target` - The element that triggered the event
+- `event.currentTarget` - The element the handler is attached to
+- `event.type` - The type of event ("click", "change", etc.)
+- `event.key` - The key pressed (for keyboard events)
+- `event.clientX` / `event.clientY` - Mouse position
+
+## Preventing Default Behavior
+
+Use `event.preventDefault()` to stop the browser's default action:
+
+```jsx
+function Form() {
+  const handleSubmit = (event) => {
+    event.preventDefault(); // Don't reload the page
+    const formData = new FormData(event.target);
+    console.log('Email:', formData.get('email'));
+  };
+
+  const handleLinkClick = (event) => {
+    event.preventDefault(); // Don't navigate
+    console.log('Link clicked, but not navigating');
+  };
+
+  return (
+    <div>
+      <form onSubmit={handleSubmit}>
+        <input name="email" type="email" required />
+        <button type="submit">Subscribe</button>
+      </form>
+      
+      <a href="https://example.com" onClick={handleLinkClick}>
+        Click me (won't navigate)
+      </a>
+    </div>
+  );
+}
+```
+
+<Note>
+**When to use preventDefault:**
+- Form submissions (to handle with JavaScript)
+- Link clicks (for client-side routing)
+- Context menu events (to show custom menus)
+- Drag and drop operations
+</Note>
+
+## Event Propagation
+
+Events "bubble up" from child to parent elements:
+
+```jsx
+function PropagationExample() {
+  const handleParentClick = () => {
+    console.log('Parent clicked');
+  };
+
+  const handleChildClick = (event) => {
+    console.log('Child clicked');
+    // event.stopPropagation(); // Uncomment to stop bubbling
+  };
+
+  return (
+    <div 
+      onClick={handleParentClick}
+      style={{ padding: '40px', background: 'lightblue' }}
+    >
+      Parent
+      <button 
+        onClick={handleChildClick}
+        style={{ margin: '20px' }}
+      >
+        Child (clicking triggers both handlers)
+      </button>
+    </div>
+  );
+}
+```
+
+### Stopping Propagation
+
+Use `event.stopPropagation()` to prevent the event from bubbling:
+
+```jsx
+function StopPropagationExample() {
+  return (
+    <div onClick={() => alert('Outer div')}>
+      <button onClick={(e) => {
+        e.stopPropagation();
+        alert('Button only');
+      }}>
+        Click me (won't trigger outer div)
+      </button>
+    </div>
+  );
+}
+```
+
+## Passing Arguments to Event Handlers
+
+There are two ways to pass additional arguments:
+
+### Using Arrow Functions
+
+```jsx
+function TodoList() {
+  const handleDelete = (id) => {
+    console.log('Deleting todo:', id);
+  };
+
+  const todos = [
+    { id: 1, text: 'Learn React' },
+    { id: 2, text: 'Build a project' },
+  ];
+
+  return (
+    <ul>
+      {todos.map(todo => (
+        <li key={todo.id}>
+          {todo.text}
+          <button onClick={() => handleDelete(todo.id)}>
+            Delete
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+```
+
+### Using bind
+
+```jsx
+function TodoList() {
+  const handleDelete = (id, event) => {
+    console.log('Deleting todo:', id);
+    console.log('Event:', event);
+  };
+
+  const todos = [
+    { id: 1, text: 'Learn React' },
+    { id: 2, text: 'Build a project' },
+  ];
+
+  return (
+    <ul>
+      {todos.map(todo => (
+        <li key={todo.id}>
+          {todo.text}
+          <button onClick={handleDelete.bind(null, todo.id)}>
+            Delete
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+```
+
+## Complete Interactive Example
+
+Here's a complete example with multiple event types:
+
+```jsx
+function InteractiveCard() {
+  const handleLike = () => {
+    alert('Post liked!');
+  };
+
+  const handleShare = (platform) => {
+    alert(`Sharing on ${platform}`);
+  };
+
+  const handleComment = (event) => {
+    event.preventDefault();
+    const comment = event.target.elements.comment.value;
+    if (comment.trim()) {
+      alert(`Comment added: ${comment}`);
+      event.target.reset();
+    }
+  };
+
+  const handleImageError = (event) => {
+    event.target.src = '/placeholder.jpg';
+  };
+
+  return (
+    <article className="card">
+      <img 
+        src="/post-image.jpg" 
+        alt="Post"
+        onError={handleImageError}
+      />
+      
+      <div className="actions">
+        <button onClick={handleLike}>❤️ Like</button>
+        <button onClick={() => handleShare('Twitter')}>Share on Twitter</button>
+        <button onClick={() => handleShare('Facebook')}>Share on Facebook</button>
+      </div>
+
+      <form onSubmit={handleComment}>
+        <input 
+          name="comment"
+          type="text" 
+          placeholder="Write a comment..."
+          onFocus={() => console.log('Comment input focused')}
+        />
+        <button type="submit">Post Comment</button>
+      </form>
+    </article>
+  );
+}
+```
+
+## Best Practices
+
+<Steps>
+
+### Name handlers clearly
+
+Use descriptive names that start with "handle":
+
+```jsx
+// Good
+handleSubmit, handleClick, handleUserLogout
+
+// Avoid
+click, submit, fn
+```
+
+### Keep handlers focused
+
+Each handler should do one thing:
+
+```jsx
+// Good - separate concerns
+const handleValidation = (data) => { /* validate */ };
+const handleSubmit = (event) => {
+  event.preventDefault();
+  const data = new FormData(event.target);
+  if (handleValidation(data)) {
+    // submit
+  }
+};
+
+// Avoid - doing too much in one handler
+```
+
+### Extract complex handlers
+
+Move complex logic outside the component:
+
+```jsx
+// utils/eventHandlers.js
+export function createSubmitHandler(onSuccess) {
+  return (event) => {
+    event.preventDefault();
+    // complex logic
+    onSuccess();
+  };
+}
+```
+
+</Steps>
+
+## Next Steps
+
+Event handlers often need to update the UI. Learn how to manage changing data with [state](/guides/managing-state).

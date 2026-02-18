@@ -1,0 +1,177 @@
+---
+title: Components
+description: Understanding React components, the building blocks of React applications
+icon: cube
+---
+
+Components are the fundamental building blocks of React applications. They let you split the UI into independent, reusable pieces and think about each piece in isolation.
+
+## What is a Component?
+
+A component is a JavaScript function or class that optionally accepts inputs (called "props") and returns a React element describing what should appear on the screen.
+
+## Function Components
+
+The simplest way to define a component is to write a JavaScript function:
+
+```jsx
+function Welcome(props) {
+  return <h1>Hello, {props.name}</h1>;
+}
+```
+
+Function components are JavaScript functions that:
+- Accept a single `props` object argument with data
+- Return a React element
+- Can use Hooks to add state and lifecycle features
+
+```jsx
+import { useState } from 'react';
+
+function Counter() {
+  const [count, setCount] = useState(0);
+  
+  return (
+    <div>
+      <p>Count: {count}</p>
+      <button onClick={() => setCount(count + 1)}>
+        Increment
+      </button>
+    </div>
+  );
+}
+```
+
+## Class Components
+
+You can also define components using ES6 classes. Class components extend from `React.Component` or `React.PureComponent`.
+
+<Tabs>
+  <Tab title="Component">
+    ```jsx
+import { Component } from 'react';
+
+class Welcome extends Component {
+  render() {
+    return <h1>Hello, {this.props.name}</h1>;
+  }
+}
+    ```
+
+    The `Component` base class provides:
+    - `this.props` - The props passed to the component
+    - `this.context` - The context value (if using context)
+    - `this.refs` - An object for accessing refs
+    - `this.setState(partialState, callback)` - Updates component state
+    - `this.forceUpdate(callback)` - Forces a re-render
+  </Tab>
+  
+  <Tab title="PureComponent">
+    ```jsx
+import { PureComponent } from 'react';
+
+class Welcome extends PureComponent {
+  render() {
+    return <h1>Hello, {this.props.name}</h1>;
+  }
+}
+    ```
+
+    `PureComponent` is similar to `Component` but implements `shouldComponentUpdate()` with a shallow prop and state comparison. This can improve performance by preventing unnecessary re-renders when props and state haven't changed.
+  </Tab>
+</Tabs>
+
+<Note>
+  **Modern React Development**: While class components are still fully supported, the React team recommends using function components with Hooks for new code. Function components are simpler, require less code, and work better with modern React features.
+</Note>
+
+## Component Composition
+
+Components can contain other components, allowing you to build complex UIs from simple building blocks:
+
+```jsx
+function App() {
+  return (
+    <div>
+      <Welcome name="Alice" />
+      <Welcome name="Bob" />
+      <Welcome name="Charlie" />
+    </div>
+  );
+}
+```
+
+### Props Children
+
+Components can pass children to other components using the special `props.children` property:
+
+```jsx
+function Card({ children }) {
+  return (
+    <div className="card">
+      {children}
+    </div>
+  );
+}
+
+function App() {
+  return (
+    <Card>
+      <h2>Card Title</h2>
+      <p>Card content goes here.</p>
+    </Card>
+  );
+}
+```
+
+React provides utilities to work with `props.children`:
+
+- `React.Children.map(children, fn)` - Invokes a function on every immediate child
+- `React.Children.forEach(children, fn)` - Like map but doesn't return an array
+- `React.Children.count(children)` - Returns the total number of children
+- `React.Children.only(children)` - Verifies that children has only one child and returns it
+- `React.Children.toArray(children)` - Returns the children as a flat array with keys
+
+<Tip>
+  `props.children` can contain any type of data: strings, numbers, React elements, arrays, fragments, or even functions. React will render elements and primitive values, but functions and objects (except React elements) won't be rendered.
+</Tip>
+
+## Component Names
+
+Always start component names with a capital letter:
+
+- `<Welcome />` - React treats this as a component
+- `<welcome />` - React treats this as a DOM tag (like `<div>` or `<span>`)
+
+## Props are Read-Only
+
+Whether you declare a component as a function or a class, it must never modify its own props:
+
+```jsx
+// ❌ Never modify props
+function Avatar(props) {
+  props.size = 100; // Wrong!
+  return <img src={props.url} />;
+}
+
+// ✅ Props should be treated as immutable
+function Avatar(props) {
+  const size = props.size || 100;
+  return <img src={props.url} width={size} />;
+}
+```
+
+<Note>
+  **Pure Functions**: All React components must act like pure functions with respect to their props. This means that given the same inputs (props), a component should always return the same output.
+</Note>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="JSX" icon="code" href="/concepts/jsx">
+    Learn about JSX syntax and how it transforms to JavaScript
+  </Card>
+  <Card title="Props and State" icon="database" href="/concepts/props-and-state">
+    Understand how to pass data and manage component state
+  </Card>
+</CardGroup>

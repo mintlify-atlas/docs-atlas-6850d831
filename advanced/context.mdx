@@ -1,0 +1,376 @@
+---
+title: Context
+description: Share data deeply through the component tree without prop drilling using React Context API.
+---
+
+## Overview
+
+Context provides a way to pass data through the component tree without having to pass props down manually at every level. It's designed to share data that can be considered "global" for a tree of React components.
+
+## Creating Context
+
+Use `createContext` to create a context object. The context comes with a Provider and Consumer.
+
+```javascript
+import { createContext } from 'react';
+
+const ThemeContext = createContext('light');
+```
+
+### API Signature
+
+From `packages/react/src/ReactContext.js:14`:
+
+```javascript
+function createContext<T>(defaultValue: T): ReactContext<T>
+```
+
+The function returns a context object with the following structure:
+
+```javascript
+{
+  $$typeof: REACT_CONTEXT_TYPE,
+  Provider: Context,        // Used to provide values
+  Consumer: ConsumerObject, // Used to consume values (legacy)
+  _currentValue: defaultValue,
+  _currentValue2: defaultValue,
+  _threadCount: 0
+}
+```
+
+## Using Context with Provider
+
+The Provider component allows consuming components to subscribe to context changes.
+
+```javascript
+import { createContext } from 'react';
+
+const ThemeContext = createContext('light');
+
+function App() {
+  return (
+    <ThemeContext.Provider value="dark">
+      <Toolbar />
+    </ThemeContext.Provider>
+  );
+}
+
+function Toolbar() {
+  return (
+    <div>
+      <ThemedButton />
+    </div>
+  );
+}
+```
+
+## Consuming Context
+
+### With useContext Hook (Recommended)
+
+The `useContext` hook is the modern way to consume context values.
+
+```javascript
+import { useContext } from 'react';
+
+function ThemedButton() {
+  const theme = useContext(ThemeContext);
+  return <button className={theme}>Click me</button>;
+}
+```
+
+<Warning>
+From `packages/react/src/ReactHooks.js:56`, calling `useContext(Context.Consumer)` is not supported:
+
+```javascript
+if (Context.$$typeof === REACT_CONSUMER_TYPE) {
+  console.error(
+    'Calling useContext(Context.Consumer) is not supported and will cause bugs. ' +
+    'Did you mean to call useContext(Context) instead?'
+  );
+}
+```
+
+Always pass the Context object directly, not `Context.Consumer`.
+</Warning>
+
+### With Context.Consumer (Legacy)
+
+The Consumer component uses a render prop pattern:
+
+```javascript
+function ThemedButton() {
+  return (
+    <ThemeContext.Consumer>
+      {theme => (
+        <button className={theme}>
+          Click me
+        </button>
+      )}
+    </ThemeContext.Consumer>
+  );
+}
+```
+
+## Practical Examples
+
+### Theme Context
+
+```javascript
+import { createContext, useContext, useState } from 'react';
+
+const ThemeContext = createContext({
+  theme: 'light',
+  toggleTheme: () => {}
+});
+
+function ThemeProvider({ children }) {
+  const [theme, setTheme] = useState('light');
+  
+  const toggleTheme = () => {
+    setTheme(prevTheme => prevTheme === 'light' ? 'dark' : 'light');
+  };
+  
+  return (
+    <ThemeContext.Provider value={{ theme, toggleTheme }}>
+      {children}
+    </ThemeContext.Provider>
+  );
+}
+
+function ThemedComponent() {
+  const { theme, toggleTheme } = useContext(ThemeContext);
+  
+  return (
+    <div className={`theme-${theme}`}>
+      <h1>Current theme: {theme}</h1>
+      <button onClick={toggleTheme}>Toggle Theme</button>
+    </div>
+  );
+}
+
+function App() {
+  return (
+    <ThemeProvider>
+      <ThemedComponent />
+    </ThemeProvider>
+  );
+}
+```
+
+### Authentication Context
+
+```javascript
+import { createContext, useContext, useState } from 'react';
+
+const AuthContext = createContext(null);
+
+function AuthProvider({ children }) {
+  const [user, setUser] = useState(null);
+  
+  const login = async (username, password) => {
+    const response = await fetch('/api/login', {
+      method: 'POST',
+      body: JSON.stringify({ username, password })
+    });
+    const userData = await response.json();
+    setUser(userData);
+  };
+  
+  const logout = () => {
+    setUser(null);
+  };
+  
+  return (
+    <AuthContext.Provider value={{ user, login, logout }}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+function useAuth() {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be used within AuthProvider');
+  }
+  return context;
+}
+
+function LoginForm() {
+  const { login } = useAuth();
+  
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    login(formData.get('username'), formData.get('password'));
+  };
+  
+  return (
+    <form onSubmit={handleSubmit}>
+      <input name="username" type="text" placeholder="Username" />
+      <input name="password" type="password" placeholder="Password" />
+      <button type="submit">Login</button>
+    </form>
+  );
+}
+
+function UserProfile() {
+  const { user, logout } = useAuth();
+  
+  if (!user) {
+    return <LoginForm />;
+  }
+  
+  return (
+    <div>
+      <h2>Welcome, {user.name}!</h2>
+      <button onClick={logout}>Logout</button>
+    </div>
+  );
+}
+```
+
+## Multiple Contexts
+
+You can use multiple contexts in a single component:
+
+```javascript
+import { createContext, useContext } from 'react';
+
+const ThemeContext = createContext('light');
+const UserContext = createContext(null);
+const LanguageContext = createContext('en');
+
+function App() {
+  return (
+    <ThemeContext.Provider value="dark">
+      <UserContext.Provider value={{ name: 'Alice' }}>
+        <LanguageContext.Provider value="es">
+          <Dashboard />
+        </LanguageContext.Provider>
+      </UserContext.Provider>
+    </ThemeContext.Provider>
+  );
+}
+
+function Dashboard() {
+  const theme = useContext(ThemeContext);
+  const user = useContext(UserContext);
+  const language = useContext(LanguageContext);
+  
+  return (
+    <div className={`theme-${theme} lang-${language}`}>
+      <h1>Welcome, {user.name}!</h1>
+    </div>
+  );
+}
+```
+
+## Default Values
+
+The default value is used when a component doesn't have a matching Provider above it:
+
+```javascript
+const ThemeContext = createContext('light');
+
+function ThemedButton() {
+  // If no Provider exists, 'light' will be used
+  const theme = useContext(ThemeContext);
+  return <button className={theme}>Click me</button>;
+}
+
+function App() {
+  // No Provider wrapping ThemedButton
+  // It will use the default value 'light'
+  return <ThemedButton />;
+}
+```
+
+## Updating Context Values
+
+<Warning>
+Context value updates trigger re-renders of all consuming components. For performance-critical applications, consider:
+
+1. Splitting contexts by update frequency
+2. Using composition to limit re-renders
+3. Memoizing context values with `useMemo`
+</Warning>
+
+```javascript
+import { createContext, useContext, useState, useMemo } from 'react';
+
+const ConfigContext = createContext(null);
+
+function ConfigProvider({ children }) {
+  const [config, setConfig] = useState({
+    theme: 'light',
+    language: 'en',
+    fontSize: 16
+  });
+  
+  // Memoize the context value to prevent unnecessary re-renders
+  const value = useMemo(() => ({
+    config,
+    updateConfig: (updates) => {
+      setConfig(prev => ({ ...prev, ...updates }));
+    }
+  }), [config]);
+  
+  return (
+    <ConfigContext.Provider value={value}>
+      {children}
+    </ConfigContext.Provider>
+  );
+}
+```
+
+## Context Internal Implementation
+
+From `packages/react/src/ReactContext.js:18`:
+
+```javascript
+const context: ReactContext<T> = {
+  $$typeof: REACT_CONTEXT_TYPE,
+  // Support for concurrent renderers
+  _currentValue: defaultValue,
+  _currentValue2: defaultValue,
+  _threadCount: 0,
+  Provider: context,
+  Consumer: {
+    $$typeof: REACT_CONSUMER_TYPE,
+    _context: context,
+  },
+};
+```
+
+React maintains separate `_currentValue` and `_currentValue2` fields to support multiple concurrent renderers (e.g., React DOM and React Native running simultaneously).
+
+## Best Practices
+
+1. **Create custom hooks**: Wrap `useContext` in custom hooks for better error handling and type safety
+
+2. **Split contexts**: Don't put all global state in one context. Split by domain or update frequency
+
+3. **Provide meaningful defaults**: Default values should be valid states, not just `null`
+
+4. **Memoize context values**: Use `useMemo` to prevent unnecessary re-renders
+
+5. **Document context shape**: Use TypeScript or JSDoc to document the context structure
+
+## When to Use Context
+
+Context is ideal for:
+- Theme data (color, font, etc.)
+- Current authenticated user
+- Locale/language preferences
+- UI state (modals, tooltips)
+
+Context may not be ideal for:
+- Frequently changing data (use state management libraries)
+- Data that only a few components need (use props)
+- Performance-critical updates (consider alternatives)
+
+## See Also
+
+- [Hooks](/api/hooks) - Learn about `useContext` and other hooks
+- [Component API](/api/component) - Component lifecycle and APIs

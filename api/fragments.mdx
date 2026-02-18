@@ -1,0 +1,488 @@
+---
+title: Fragments
+description: Group multiple elements without adding extra DOM nodes
+---
+
+Fragments let you group a list of children without adding extra nodes to the DOM. This is useful when a component needs to return multiple elements but you don't want to wrap them in an unnecessary container.
+
+## Fragment
+
+The `Fragment` component allows you to group multiple children without adding an extra DOM element.
+
+```javascript
+import { Fragment } from 'react';
+
+function List() {
+  return (
+    <Fragment>
+      <li>Item 1</li>
+      <li>Item 2</li>
+      <li>Item 3</li>
+    </Fragment>
+  );
+}
+```
+
+### Type
+
+```typescript
+const Fragment: symbol = Symbol.for('react.fragment')
+```
+
+Internally, `Fragment` is represented by the symbol `Symbol.for('react.fragment')` (the value of `REACT_FRAGMENT_TYPE` in React's source).
+
+## Short Syntax
+
+You can use `<></>` as shorthand for `<Fragment></Fragment>`:
+
+```javascript
+function List() {
+  return (
+    <>
+      <li>Item 1</li>
+      <li>Item 2</li>
+      <li>Item 3</li>
+    </>
+  );
+}
+```
+
+The short syntax:
+- Is more concise and commonly used
+- Does not support keys or other attributes
+- Is functionally identical to `<Fragment>`
+
+## Usage
+
+### Returning Multiple Elements
+
+Fragments are most commonly used to return multiple elements from a component:
+
+```javascript
+function Profile() {
+  return (
+    <>
+      <h1>User Profile</h1>
+      <p>Welcome to your profile page</p>
+      <button>Edit Profile</button>
+    </>
+  );
+}
+```
+
+Without fragments, you would need to wrap these in a `<div>` or other element, adding an extra node to the DOM:
+
+```javascript
+// ❌ Adds unnecessary <div>
+function Profile() {
+  return (
+    <div>
+      <h1>User Profile</h1>
+      <p>Welcome to your profile page</p>
+      <button>Edit Profile</button>
+    </div>
+  );
+}
+```
+
+### Avoiding Wrapper Elements
+
+Fragments are especially useful when wrapper elements would break styling or semantics:
+
+**Table rows:**
+
+```javascript
+function Columns() {
+  return (
+    <>
+      <td>Column 1</td>
+      <td>Column 2</td>
+      <td>Column 3</td>
+    </>
+  );
+}
+
+function Table() {
+  return (
+    <table>
+      <tbody>
+        <tr>
+          <Columns />
+        </tr>
+      </tbody>
+    </table>
+  );
+}
+// Renders: <table><tbody><tr><td>...</td><td>...</td><td>...</td></tr></tbody></table>
+```
+
+**Flex/Grid layouts:**
+
+```javascript
+function FlexItems() {
+  return (
+    <>
+      <div>Item 1</div>
+      <div>Item 2</div>
+      <div>Item 3</div>
+    </>
+  );
+}
+
+function FlexContainer() {
+  return (
+    <div style={{ display: 'flex' }}>
+      <FlexItems />
+    </div>
+  );
+}
+// All items are direct children of the flex container
+```
+
+**Lists:**
+
+```javascript
+function ListItems() {
+  return (
+    <>
+      <li>Apple</li>
+      <li>Banana</li>
+      <li>Orange</li>
+    </>
+  );
+}
+
+function List() {
+  return (
+    <ul>
+      <ListItems />
+    </ul>
+  );
+}
+```
+
+### With Text and Elements
+
+Fragments can contain any mix of elements and text:
+
+```javascript
+function Description() {
+  return (
+    <>
+      Some text
+      <strong>bold text</strong>
+      more text
+    </>
+  );
+}
+```
+
+### Conditional Rendering
+
+Fragments work well with conditional rendering:
+
+```javascript
+function ConditionalContent({ showExtra }) {
+  return (
+    <>
+      <p>This is always shown</p>
+      {showExtra && (
+        <>
+          <p>Extra content line 1</p>
+          <p>Extra content line 2</p>
+        </>
+      )}
+    </>
+  );
+}
+```
+
+## Using Keys with Fragments
+
+When you need to provide a `key` to a fragment (e.g., when mapping over an array), you must use the explicit `<Fragment>` syntax:
+
+```javascript
+import { Fragment } from 'react';
+
+function DescriptionList({ items }) {
+  return (
+    <dl>
+      {items.map(item => (
+        <Fragment key={item.id}>
+          <dt>{item.term}</dt>
+          <dd>{item.description}</dd>
+        </Fragment>
+      ))}
+    </dl>
+  );
+}
+
+// Usage:
+<DescriptionList
+  items={[
+    { id: 1, term: 'React', description: 'A JavaScript library' },
+    { id: 2, term: 'Fragment', description: 'A way to group elements' }
+  ]}
+/>
+```
+
+<Note>
+The short syntax `<></>` does not support keys or any other attributes. If you need to add a key, you must use the explicit `<Fragment key={...}>` syntax.
+</Note>
+
+**Why keys are needed:**
+
+When mapping over an array, React needs keys to track which items have changed:
+
+```javascript
+// ❌ Wrong - no key on fragment
+function BadList({ items }) {
+  return items.map(item => (
+    <>
+      <h3>{item.title}</h3>
+      <p>{item.text}</p>
+    </>
+  ));
+}
+
+// ✅ Correct - key on Fragment
+function GoodList({ items }) {
+  return items.map(item => (
+    <Fragment key={item.id}>
+      <h3>{item.title}</h3>
+      <p>{item.text}</p>
+    </Fragment>
+  ));
+}
+```
+
+## When to Use Fragments
+
+### Use Fragments When:
+
+**1. You need to return multiple elements from a component:**
+
+```javascript
+function Component() {
+  return (
+    <>
+      <Header />
+      <Content />
+      <Footer />
+    </>
+  );
+}
+```
+
+**2. Wrapper elements would break CSS or layout:**
+
+```javascript
+// Flexbox/Grid children
+function GridItems() {
+  return (
+    <>
+      <div className="item">1</div>
+      <div className="item">2</div>
+    </>
+  );
+}
+```
+
+**3. Semantic HTML requires specific parent-child relationships:**
+
+```javascript
+// Table, list, or definition list elements
+function TableRows() {
+  return (
+    <>
+      <tr><td>Row 1</td></tr>
+      <tr><td>Row 2</td></tr>
+    </>
+  );
+}
+```
+
+**4. You're mapping over data and each item needs multiple elements:**
+
+```javascript
+function List({ items }) {
+  return items.map(item => (
+    <Fragment key={item.id}>
+      <dt>{item.name}</dt>
+      <dd>{item.value}</dd>
+    </Fragment>
+  ));
+}
+```
+
+### Don't Use Fragments When:
+
+**1. You need to apply styles or event handlers:**
+
+```javascript
+// ❌ Can't add props to Fragment
+<Fragment className="container" onClick={handleClick}>
+  <div>Content</div>
+</Fragment>
+
+// ✅ Use a real element
+<div className="container" onClick={handleClick}>
+  <div>Content</div>
+</div>
+```
+
+**2. You only have a single child:**
+
+```javascript
+// ❌ Unnecessary
+return (
+  <>
+    <div>Single child</div>
+  </>
+);
+
+// ✅ Return directly
+return <div>Single child</div>;
+```
+
+**3. The wrapper element has semantic meaning:**
+
+```javascript
+// ❌ Missing semantic wrapper
+function Article() {
+  return (
+    <>
+      <h1>Title</h1>
+      <p>Content</p>
+    </>
+  );
+}
+
+// ✅ Use semantic HTML
+function Article() {
+  return (
+    <article>
+      <h1>Title</h1>
+      <p>Content</p>
+    </article>
+  );
+}
+```
+
+## Fragment vs. Array
+
+Before fragments existed, people used arrays to return multiple elements:
+
+```javascript
+// Old way with arrays
+function Component() {
+  return [
+    <div key="1">First</div>,
+    <div key="2">Second</div>,
+    <div key="3">Third</div>
+  ];
+}
+
+// Modern way with fragments
+function Component() {
+  return (
+    <>
+      <div>First</div>
+      <div>Second</div>
+      <div>Third</div>
+    </>
+  );
+}
+```
+
+**Advantages of fragments over arrays:**
+
+- No need to add keys to every element
+- Cleaner, more readable syntax
+- Works better with TypeScript typing
+- No commas between elements
+
+## Example: Complex Fragment Usage
+
+```javascript
+import { Fragment } from 'react';
+
+function BlogPost({ post, comments }) {
+  return (
+    <article>
+      {/* Fragment with key for mapping */}
+      {post.sections.map(section => (
+        <Fragment key={section.id}>
+          <h2>{section.title}</h2>
+          <p>{section.content}</p>
+        </Fragment>
+      ))}
+      
+      <hr />
+      
+      {/* Short syntax for static content */}
+      <>
+        <h3>Comments</h3>
+        {comments.length === 0 ? (
+          <p>No comments yet</p>
+        ) : (
+          <ul>
+            {comments.map(comment => (
+              <Fragment key={comment.id}>
+                <li>
+                  <strong>{comment.author}</strong>
+                  <p>{comment.text}</p>
+                </li>
+              </Fragment>
+            ))}
+          </ul>
+        )}
+      </>
+    </article>
+  );
+}
+```
+
+## createElement with Fragments
+
+You can create fragments programmatically using `createElement`:
+
+```javascript
+import { createElement, Fragment } from 'react';
+
+const element = createElement(
+  Fragment,
+  null,
+  createElement('div', null, 'First'),
+  createElement('div', null, 'Second')
+);
+
+// Equivalent to:
+// <>  
+//   <div>First</div>
+//   <div>Second</div>
+// </>
+```
+
+With key:
+
+```javascript
+const items = data.map(item =>
+  createElement(
+    Fragment,
+    { key: item.id },
+    createElement('dt', null, item.name),
+    createElement('dd', null, item.value)
+  )
+);
+```
+
+<Note>
+**Performance:**
+
+Fragments have no performance overhead compared to using wrapper `<div>` elements. In fact, they can be slightly more performant because:
+
+1. They don't create DOM nodes
+2. The React reconciliation algorithm has less work to do
+3. There are fewer elements in the DOM tree
+</Note>

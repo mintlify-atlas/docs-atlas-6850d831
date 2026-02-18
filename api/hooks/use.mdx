@@ -1,0 +1,500 @@
+---
+title: use
+description: Read the value of a resource like a Promise or Context
+---
+
+`use` is a React Hook that lets you read the value of a resource like a Promise or Context.
+
+```typescript
+function use<T>(resource: Usable<T>): T
+```
+
+<Note>
+`use` is different from other React Hooks because it can be called conditionally and inside loops. However, like other Hooks, it can only be called in components or other Hooks.
+</Note>
+
+## Parameters
+
+<ParamField path="resource" type="Promise<T> | Context<T>" required>
+  The resource you want to read a value from. A resource can be a Promise or a Context.
+  
+  - **Promise**: React will suspend until the Promise resolves, then return the resolved value
+  - **Context**: Works like `useContext`, returning the current context value
+</ParamField>
+
+## Returns
+
+Returns the resolved value of the resource (the resolved value of the Promise or the context value).
+
+## Usage
+
+### Reading context with use
+
+When a Context is passed to `use`, it works similarly to `useContext`:
+
+```javascript
+import { use } from 'react';
+import { ThemeContext } from './ThemeContext';
+
+function Button() {
+  const theme = use(ThemeContext);
+  return <button className={theme}>Click me</button>;
+}
+```
+
+Unlike `useContext`, `use` can be called conditionally and in loops:
+
+```javascript
+function HorizontalRule({ show }) {
+  // ✅ Conditional use is allowed
+  if (show) {
+    const theme = use(ThemeContext);
+    return <hr className={theme} />;
+  }
+  return null;
+}
+```
+
+### Streaming data from the server to the client
+
+Data can be streamed from the server to the client by passing a Promise as a prop:
+
+```javascript
+// Server Component
+import { fetchMessage } from './api';
+
+export default async function App() {
+  const messagePromise = fetchMessage();
+  return <Message messagePromise={messagePromise} />;
+}
+
+// Client Component
+'use client';
+import { use } from 'react';
+
+function Message({ messagePromise }) {
+  const message = use(messagePromise);
+  return <p>{message}</p>;
+}
+```
+
+<Note>
+When passing a Promise from a Server Component to a Client Component, its resolved value must be serializable to pass between server and client.
+</Note>
+
+### Dealing with rejected Promises
+
+Wrap your component with an error boundary to handle rejected Promises:
+
+```javascript
+import { use, Suspense } from 'react';
+import { ErrorBoundary } from 'react-error-boundary';
+
+function MessageContainer({ messagePromise }) {
+  return (
+    <ErrorBoundary fallback={<p>Error loading message</p>}>
+      <Suspense fallback={<p>Loading message...</p>}>
+        <Message messagePromise={messagePromise} />
+      </Suspense>
+    </ErrorBoundary>
+  );
+}
+
+function Message({ messagePromise }) {
+  const message = use(messagePromise);
+  return <p>{message}</p>;
+}
+```
+
+## Common Patterns
+
+### Fetching data with use
+
+<Tabs>
+  <Tab title="Basic">
+    ```javascript
+    import { use, Suspense } from 'react';
+    
+    function UserProfile({ userPromise }) {
+      const user = use(userPromise);
+      
+      return (
+        <div>
+          <h1>{user.name}</h1>
+          <p>{user.email}</p>
+        </div>
+      );
+    }
+    
+    function App() {
+      const userPromise = fetchUser(userId);
+      
+      return (
+        <Suspense fallback={<div>Loading...</div>}>
+          <UserProfile userPromise={userPromise} />
+        </Suspense>
+      );
+    }
+    ```
+  </Tab>
+  <Tab title="With Error Handling">
+    ```javascript
+    import { use, Suspense } from 'react';
+    import { ErrorBoundary } from 'react-error-boundary';
+    
+    function UserProfile({ userPromise }) {
+      const user = use(userPromise);
+      
+      return (
+        <div>
+          <h1>{user.name}</h1>
+          <p>{user.email}</p>
+        </div>
+      );
+    }
+    
+    function App() {
+      const userPromise = fetchUser(userId);
+      
+      return (
+        <ErrorBoundary fallback={<div>Error loading user</div>}>
+          <Suspense fallback={<div>Loading...</div>}>
+            <UserProfile userPromise={userPromise} />
+          </Suspense>
+        </ErrorBoundary>
+      );
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### Conditional data fetching
+
+```javascript
+import { use } from 'react';
+
+function UserData({ userId, showDetails }) {
+  // ✅ Can call use conditionally
+  if (showDetails) {
+    const user = use(fetchUser(userId));
+    return (
+      <div>
+        <h2>{user.name}</h2>
+        <p>{user.bio}</p>
+      </div>
+    );
+  }
+  
+  return <div>Basic info only</div>;
+}
+```
+
+### Reading multiple resources
+
+```javascript
+import { use, Suspense } from 'react';
+
+function Dashboard({ userPromise, postsPromise, statsPromise }) {
+  const user = use(userPromise);
+  const posts = use(postsPromise);
+  const stats = use(statsPromise);
+  
+  return (
+    <div>
+      <h1>Welcome, {user.name}!</h1>
+      <p>You have {posts.length} posts</p>
+      <p>Total views: {stats.views}</p>
+    </div>
+  );
+}
+
+function App() {
+  const userPromise = fetchUser();
+  const postsPromise = fetchPosts();
+  const statsPromise = fetchStats();
+  
+  return (
+    <Suspense fallback={<div>Loading dashboard...</div>}>
+      <Dashboard
+        userPromise={userPromise}
+        postsPromise={postsPromise}
+        statsPromise={statsPromise}
+      />
+    </Suspense>
+  );
+}
+```
+
+### Using with Context
+
+```javascript
+import { use, createContext } from 'react';
+
+const UserContext = createContext(null);
+
+function Profile() {
+  const user = use(UserContext);
+  
+  if (!user) {
+    return <p>Please log in</p>;
+  }
+  
+  return <h1>Welcome, {user.name}!</h1>;
+}
+
+function App() {
+  const [user, setUser] = useState(null);
+  
+  return (
+    <UserContext.Provider value={user}>
+      <Profile />
+    </UserContext.Provider>
+  );
+}
+```
+
+### Parallel data fetching
+
+```javascript
+import { use, Suspense } from 'react';
+
+function Article({ articleId }) {
+  // Start fetching in parallel
+  const contentPromise = fetchArticleContent(articleId);
+  const commentsPromise = fetchArticleComments(articleId);
+  const authorPromise = fetchArticleAuthor(articleId);
+  
+  return (
+    <article>
+      <Suspense fallback={<div>Loading content...</div>}>
+        <Content contentPromise={contentPromise} />
+      </Suspense>
+      
+      <Suspense fallback={<div>Loading author...</div>}>
+        <Author authorPromise={authorPromise} />
+      </Suspense>
+      
+      <Suspense fallback={<div>Loading comments...</div>}>
+        <Comments commentsPromise={commentsPromise} />
+      </Suspense>
+    </article>
+  );
+}
+
+function Content({ contentPromise }) {
+  const content = use(contentPromise);
+  return <div>{content}</div>;
+}
+
+function Author({ authorPromise }) {
+  const author = use(authorPromise);
+  return <p>By {author.name}</p>;
+}
+
+function Comments({ commentsPromise }) {
+  const comments = use(commentsPromise);
+  return (
+    <ul>
+      {comments.map(comment => (
+        <li key={comment.id}>{comment.text}</li>
+      ))}
+    </ul>
+  );
+}
+```
+
+## TypeScript
+
+```typescript
+import { use, createContext } from 'react';
+
+// With Promise
+interface User {
+  id: string;
+  name: string;
+  email: string;
+}
+
+function UserProfile({ userPromise }: { userPromise: Promise<User> }) {
+  const user = use(userPromise);
+  return <h1>{user.name}</h1>;
+}
+
+// With Context
+const ThemeContext = createContext<'light' | 'dark'>('light');
+
+function ThemedButton() {
+  const theme = use(ThemeContext);
+  return <button className={theme}>Click me</button>;
+}
+
+// Generic resource
+type Resource<T> = Promise<T> | React.Context<T>;
+
+function DataDisplay<T>({ resource }: { resource: Resource<T> }) {
+  const data = use(resource);
+  return <div>{JSON.stringify(data)}</div>;
+}
+```
+
+## Troubleshooting
+
+### "use" is not a function or is undefined
+
+Make sure you're using a version of React that supports `use` (React 19+):
+
+```javascript
+import { use } from 'react'; // React 19+
+```
+
+### The component suspends but never resolves
+
+Make sure your Promise eventually resolves:
+
+```javascript
+// ❌ Promise never resolves
+const neverResolves = new Promise(() => {});
+
+// ✅ Promise resolves
+const resolves = new Promise(resolve => {
+  setTimeout(() => resolve('data'), 1000);
+});
+```
+
+### Can I use "use" with useMemo?
+
+No, `use` reads resources synchronously. For Promises, wrap the component in Suspense:
+
+```javascript
+// ❌ Don't memoize promises with use
+const data = useMemo(() => use(promise), [promise]);
+
+// ✅ Just use directly (component suspends)
+const data = use(promise);
+```
+
+### Should I always use "use" for context?
+
+No, `useContext` is still the primary way to read context. Use `use` when you need conditional context reading:
+
+```javascript
+// ✅ Regular context reading
+function Component() {
+  const theme = useContext(ThemeContext);
+  return <div className={theme}>Content</div>;
+}
+
+// ✅ Conditional context reading
+function Component({ showThemed }) {
+  if (showThemed) {
+    const theme = use(ThemeContext);
+    return <div className={theme}>Content</div>;
+  }
+  return <div>Content</div>;
+}
+```
+
+## Best Practices
+
+### Wrap in Suspense
+
+Always wrap components that use Promises with Suspense:
+
+```javascript
+import { use, Suspense } from 'react';
+
+function App() {
+  return (
+    <Suspense fallback={<Loading />}>
+      <DataComponent dataPromise={fetchData()} />
+    </Suspense>
+  );
+}
+```
+
+### Add error boundaries
+
+```javascript
+import { ErrorBoundary } from 'react-error-boundary';
+
+function App() {
+  return (
+    <ErrorBoundary fallback={<Error />}>
+      <Suspense fallback={<Loading />}>
+        <DataComponent dataPromise={fetchData()} />
+      </Suspense>
+    </ErrorBoundary>
+  );
+}
+```
+
+### Start fetching early
+
+```javascript
+// ✅ Good: Start fetching before rendering
+function App() {
+  const dataPromise = fetchData(); // Start immediately
+  return (
+    <Suspense fallback={<Loading />}>
+      <DataComponent dataPromise={dataPromise} />
+    </Suspense>
+  );
+}
+
+// ❌ Bad: Start fetching during render
+function DataComponent() {
+  const dataPromise = fetchData(); // Starts later
+  const data = use(dataPromise);
+  return <div>{data}</div>;
+}
+```
+
+### Don't create promises during render
+
+```javascript
+// ❌ Bad: Creates new promise each render
+function Component() {
+  const data = use(fetch('/api/data').then(r => r.json()));
+  return <div>{data}</div>;
+}
+
+// ✅ Good: Promise created outside component
+const dataPromise = fetch('/api/data').then(r => r.json());
+
+function Component() {
+  const data = use(dataPromise);
+  return <div>{data}</div>;
+}
+
+// ✅ Good: Promise passed as prop
+function Component({ dataPromise }) {
+  const data = use(dataPromise);
+  return <div>{data}</div>;
+}
+```
+
+## When to use "use"
+
+Use `use` when:
+- ✅ Reading a Promise in a component
+- ✅ You need conditional Hook calls
+- ✅ Streaming data from server to client
+- ✅ Reading context conditionally
+
+Use `useContext` when:
+- ✅ Reading context unconditionally
+- ✅ You prefer explicit Hook naming
+
+Use `useEffect` + `useState` when:
+- ✅ You need to fetch data client-side without Suspense
+- ✅ You need fine-grained loading states
+- ✅ You're not using React Server Components
+
+## Comparison with other data fetching methods
+
+| Method | Suspense | Error Boundary | Conditional | Server/Client |
+|--------|----------|----------------|-------------|---------------|
+| `use(promise)` | Yes | Yes | Yes | Both |
+| `useEffect` + `fetch` | No | No | Yes | Client |
+| Async Server Component | Automatic | Yes | No | Server |
+| React Query / SWR | Optional | Yes | Yes | Client |

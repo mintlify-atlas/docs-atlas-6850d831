@@ -1,0 +1,654 @@
+---
+title: Optimization Passes
+description: Detailed guide to React Compiler's optimization passes
+---
+
+# Optimization Passes
+
+React Compiler includes numerous optimization passes that transform code at different stages of compilation. This guide covers the major passes and their purposes.
+
+## Pass Categories
+
+Optimization passes are organized into several categories:
+
+1. **HIR Construction & SSA** (passes 1-3)
+2. **Early Optimization** (passes 4-5)
+3. **Type & Effect Inference** (passes 6-10)
+4. **Reactive Scope Construction** (passes 11-20)
+5. **Reactive Function Optimization** (passes 22-29)
+6. **Code Generation** (passes 30-31)
+7. **Optional Transformations** (feature-gated)
+
+## Early Optimization Passes
+
+### Constant Propagation
+
+**File:** `src/Optimization/ConstantPropagation.ts`
+
+Implements sparse conditional constant propagation (SCCP).
+
+**What it does:**
+- Replaces variables with known constant values
+- Evaluates constant expressions at compile time
+- Simplifies conditional branches with constant tests
+
+**Example:**
+
+<CodeGroup>
+
+```javascript Before
+function Component({ enabled }) {
+  const DEBUG = true;
+  const multiplier = 2;
+  const value = 10 * multiplier;
+  
+  if (DEBUG) {
+    console.log(value);
+  }
+  
+  return enabled ? value : 0;
+}
+```
+
+```javascript After
+function Component({ enabled }) {
+  const DEBUG = true;
+  const multiplier = 2;
+  const value = 20;  // Propagated: 10 * 2
+  
+  // Branch simplified (DEBUG is always true)
+  console.log(value);
+  
+  return enabled ? value : 0;
+}
+```
+
+</CodeGroup>
+
+### Dead Code Elimination
+
+**File:** `src/Optimization/DeadCodeElimination.ts`
+
+Removes unreferenced instructions and unreachable code.
+
+**What it does:**
+- Identifies unreferenced values
+- Removes instructions with no side effects that aren't used
+- Eliminates unreachable basic blocks
+
+**Example:**
+
+<CodeGroup>
+
+```javascript Before
+function Component(props) {
+  const unused = expensiveCalculation();
+  const alsoUnused = props.x * 2;
+  const used = props.y + 1;
+  
+  return <div>{used}</div>;
+}
+```
+
+```javascript After
+function Component(props) {
+  const used = props.y + 1;
+  
+  return <div>{used}</div>;
+}
+```
+
+</CodeGroup>
+
+### Instruction Reordering
+
+**File:** `src/Optimization/InstructionReordering.ts`  
+**Flag:** `enableInstructionReordering`
+
+Reorders instructions to improve memoization opportunities.
+
+**What it does:**
+- Moves independent instructions earlier
+- Groups related computations
+- Improves reactive scope boundaries
+
+## Type Inference
+
+### InferTypes
+
+**File:** `src/TypeInference/InferTypes.ts`
+
+Infers types through constraint-based unification.
+
+**Type Categories:**
+
+```typescript
+type Type =
+  | Primitive        // number, string, boolean, null, undefined
+  | Object           // Objects with optional shape
+  | Array            // Array type
+  | Function         // Functions and hooks
+  | Poly             // Polymorphic (union) types
+  | Mixed            // Mixed/unknown
+  | MixedReadonly;   // Readonly mixed
+```
+
+**Example:**
+
+```javascript
+// Input
+const [count, setCount] = useState(0);
+const doubled = count * 2;
+const items = [1, 2, 3];
+
+// Inferred types
+count: Primitive
+setCount: Function<BuiltInSetState>
+doubled: Primitive
+items: Object<BuiltInArray>
+```
+
+## Effect Inference
+
+### AnalyseFunctions
+
+**File:** `src/Inference/AnalyseFunctions.ts`
+
+Analyzes nested function expressions and arrow functions.
+
+**What it does:**
+- Determines what values functions capture
+- Identifies function effects (pure, mutating, etc.)
+- Marks functions that can be memoized
+
+### InferMutationAliasingEffects
+
+**File:** `src/Inference/InferMutationAliasingEffects.ts`
+
+Infers mutation and aliasing effects through abstract interpretation.
+
+**Effects tracked:**
+
+**Data Flow:**
+- `Capture a -> b`: Value `a` captured into `b`
+- `Alias a -> b`: `b` aliases `a`
+- `Assign a -> b`: Direct assignment
+- `Freeze value`: Make value immutable
+
+**Mutation:**
+- `Mutate value`: Direct mutation
+- `MutateTransitive value`: Transitive mutation
+- `MutateConditionally value`: Conditional mutation
+
+**Special:**
+- `Render place`: Used in JSX/render context
+- `Impure place`: Contains impure value (Date.now(), ref.current)
+
+**Example:**
+
+```javascript
+function Component({ items }) {
+  // items: no effects (just read)
+  
+  const filtered = items.filter(x => x.active);
+  // Effects: Capture items -> filtered
+  
+  const modified = [...filtered];
+  modified.push('new');
+  // Effects: 
+  //   - Capture filtered -> modified
+  //   - Mutate modified
+  
+  return <List data={filtered} />;
+  // Effects: Render filtered
+}
+```
+
+### InferReactivePlaces
+
+**File:** `src/Inference/InferReactivePlaces.ts`
+
+Marks which places are reactive (need memoization).
+
+**Reactive categories:**
+- Component props
+- Hook return values
+- Values derived from reactive values
+- Values used in JSX (render context)
+
+## Reactive Scope Passes
+
+### InferReactiveScopeVariables
+
+**File:** `src/ReactiveScopes/InferReactiveScopeVariables.ts`
+
+Groups instructions that should invalidate together.
+
+**Algorithm:**
+1. Build value dependency graph
+2. Find strongly connected components
+3. Create scope boundaries
+4. Compute scope dependencies
+
+**Example:**
+
+```javascript
+function Component({ a, b }) {
+  // Scope 1: depends on 'a'
+  const x = a * 2;
+  const y = x + 1;
+  
+  // Scope 2: depends on 'b'
+  const z = b * 3;
+  
+  // Scope 3: depends on x, y, z
+  return <div>{x} {y} {z}</div>;
+}
+```
+
+### Scope Alignment Passes
+
+#### AlignMethodCallScopes
+
+**File:** `src/ReactiveScopes/AlignMethodCallScopes.ts`
+
+Aligns method call scopes with their receivers.
+
+```javascript
+// Before alignment
+const obj = { method() {} };
+const result = obj.method();  // Scope includes obj creation
+
+// After alignment
+const obj = { method() {} };   // Scope 1
+const result = obj.method();   // Scope 2 (depends on Scope 1)
+```
+
+#### AlignObjectMethodScopes
+
+**File:** `src/ReactiveScopes/AlignObjectMethodScopes.ts`
+
+Aligns object method definitions to scope boundaries.
+
+#### AlignReactiveScopesToBlockScopesHIR
+
+**File:** `src/ReactiveScopes/AlignReactiveScopesToBlockScopesHIR.ts`
+
+Ensures reactive scopes respect control flow boundaries.
+
+```javascript
+// Scope cannot cross if/else boundary
+function Component({ condition, value }) {
+  let result;
+  
+  if (condition) {
+    // Scope 1
+    result = value * 2;
+  } else {
+    // Scope 2
+    result = value * 3;
+  }
+  
+  // Scope 3: uses result (phi node)
+  return <div>{result}</div>;
+}
+```
+
+### Scope Merging
+
+#### MergeOverlappingReactiveScopesHIR
+
+**File:** `src/HIR/MergeOverlappingReactiveScopesHIR.ts`
+
+Merges scopes with overlapping ranges.
+
+**Example:**
+
+<CodeGroup>
+
+```javascript Before
+const x = props.a;      // Scope 1
+const y = x + 1;        // Scope 2 (overlaps with 1)
+const z = y + 2;        // Scope 3 (overlaps with 2)
+```
+
+```javascript After
+const x = props.a;
+const y = x + 1;
+const z = y + 2;        // Single merged scope
+```
+
+</CodeGroup>
+
+#### MergeReactiveScopesThatInvalidateTogether
+
+**File:** `src/ReactiveScopes/MergeReactiveScopesThatInvalidateTogether.ts`
+
+Merges scopes that always invalidate together.
+
+```javascript
+// Both scopes always invalidate together
+function Component({ a }) {
+  const x = a * 2;        // Scope 1: deps [a]
+  const y = a + 1;        // Scope 2: deps [a]
+  // Merged: both depend only on 'a'
+  
+  return <div>{x} {y}</div>;
+}
+```
+
+### Scope Pruning
+
+#### FlattenReactiveLoopsHIR
+
+**File:** `src/ReactiveScopes/FlattenReactiveLoopsHIR.ts`
+
+Prunes reactive scopes inside loops (can't memoize loop iterations).
+
+#### FlattenScopesWithHooksOrUseHIR
+
+**File:** `src/ReactiveScopes/FlattenScopesWithHooksOrUseHIR.ts`
+
+Removes scopes containing hook calls (hooks can't be conditional).
+
+```javascript
+// Can't memoize hook call
+function Component({ enabled }) {
+  // No scope around this
+  const [state, setState] = useState(0);
+  
+  // This can be memoized
+  const doubled = state * 2;
+  
+  return <div>{doubled}</div>;
+}
+```
+
+#### PruneNonEscapingScopes
+
+**File:** `src/ReactiveScopes/PruneNonEscapingScopes.ts`
+
+Removes scopes for values that don't escape the function.
+
+```javascript
+function Component() {
+  // temp doesn't escape, no scope needed
+  const temp = 42;
+  const result = temp * 2;
+  
+  // result escapes via return, needs scope
+  return <div>{result}</div>;
+}
+```
+
+#### PruneNonReactiveDependencies
+
+**File:** `src/ReactiveScopes/PruneNonReactiveDependencies.ts`
+
+Removes non-reactive dependencies from scope deps.
+
+```javascript
+// Constants aren't reactive dependencies
+const MULTIPLIER = 2;
+
+function Component({ value }) {
+  const result = value * MULTIPLIER;
+  // Scope depends on: [value]
+  // Not: [value, MULTIPLIER]
+}
+```
+
+#### PruneAlwaysInvalidatingScopes
+
+**File:** `src/ReactiveScopes/PruneAlwaysInvalidatingScopes.ts`
+
+Removes scopes that always recompute.
+
+```javascript
+// Always invalidates (depends on Date.now())
+function Component() {
+  // No scope - always recomputes
+  const timestamp = Date.now();
+  
+  return <div>{timestamp}</div>;
+}
+```
+
+### Dependency Optimization
+
+#### PropagateScopeDependenciesHIR
+
+**File:** `src/HIR/PropagateScopeDependenciesHIR.ts`
+
+Computes minimal precise dependencies for scopes.
+
+**Example:**
+
+<CodeGroup>
+
+```javascript Before (over-specified)
+function Component({ user }) {
+  const name = user.profile.name;
+  // Depends on: user
+}
+```
+
+```javascript After (precise)
+function Component({ user }) {
+  const name = user.profile.name;
+  // Depends on: user.profile.name
+}
+```
+
+</CodeGroup>
+
+## Optional Transformations
+
+### Drop Manual Memoization
+
+**File:** `src/Inference/DropManualMemoization.ts`  
+**Condition:** `!enablePreserveExistingManualUseMemo`
+
+Removes manual `useMemo`/`useCallback` calls.
+
+```javascript
+// Before
+const value = useMemo(() => expensive(props), [props]);
+
+// After
+const value = expensive(props);
+// Compiler adds automatic memoization
+```
+
+### Transform Fire
+
+**File:** `src/Transform/TransformFire.ts`  
+**Flag:** `enableFire`
+
+Transforms `fire()` calls for effect callbacks.
+
+### Lower Context Access
+
+**File:** `src/Optimization/LowerContextAccess.ts`  
+**Flag:** `lowerContextAccess`
+
+Optimizes React context access with inline selectors.
+
+### Outline JSX
+
+**File:** `src/Optimization/OutlineJsx.ts`  
+**Flag:** `enableJsxOutlining`
+
+Extracts static JSX into separate components.
+
+<CodeGroup>
+
+```javascript Before
+function Component({ name }) {
+  return (
+    <div>
+      <header>
+        <h1>Title</h1>
+      </header>
+      <main>
+        <p>Hello {name}</p>
+      </main>
+    </div>
+  );
+}
+```
+
+```javascript After
+function Component({ name }) {
+  return (
+    <div>
+      <Header />
+      <main>
+        <p>Hello {name}</p>
+      </main>
+    </div>
+  );
+}
+
+function Header() {
+  return (
+    <header>
+      <h1>Title</h1>
+    </header>
+  );
+}
+```
+
+</CodeGroup>
+
+### Outline Functions
+
+**File:** `src/Optimization/OutlineFunctions.ts`  
+**Flag:** `enableFunctionOutlining`
+
+Extracts pure function expressions to module scope.
+
+### Optimize for SSR
+
+**File:** `src/Optimization/OptimizeForSSR.ts`  
+**Condition:** `outputMode === 'ssr'`
+
+Applies server-side rendering optimizations.
+
+### Inline JSX Transform
+
+**File:** `src/Optimization/InlineJsxTransform.ts`  
+**Flag:** `inlineJsxTransform`
+
+Inlines JSX as object literals instead of runtime calls.
+
+<CodeGroup>
+
+```javascript Standard JSX Transform
+import { jsx } from 'react/jsx-runtime';
+
+function Component() {
+  return jsx('div', { children: 'Hello' });
+}
+```
+
+```javascript Inline Transform
+function Component() {
+  return {
+    $$typeof: Symbol.for('react.element'),
+    type: 'div',
+    props: { children: 'Hello' },
+    // ...
+  };
+}
+```
+
+</CodeGroup>
+
+## Code Generation Passes
+
+### Rename Variables
+
+**File:** `src/ReactiveScopes/RenameVariables.ts`
+
+Ensures unique variable names in output.
+
+### Promote Used Temporaries
+
+**File:** `src/ReactiveScopes/PromoteUsedTemporaries.ts`
+
+Promotes compiler temporaries to named variables when referenced across scopes.
+
+### Codegen Reactive Function
+
+**File:** `src/ReactiveScopes/CodegenReactiveFunction.ts`
+
+Generates final JavaScript with memoization:
+
+```javascript
+import { c as _c } from "react/compiler-runtime";
+
+function Component(props) {
+  const $ = _c(4);
+  
+  let t0;
+  if ($[0] !== props.value) {
+    t0 = compute(props.value);
+    $[0] = props.value;
+    $[1] = t0;
+  } else {
+    t0 = $[1];
+  }
+  
+  return <div>{t0}</div>;
+}
+```
+
+## Pass Ordering
+
+Passes run in a specific order to ensure correctness:
+
+1. **Lower** → Convert to HIR
+2. **EnterSSA** → SSA form
+3. **Type/Effect Inference** → Understand data flow
+4. **Scope Inference** → Find memoization boundaries
+5. **Scope Optimization** → Prune and merge scopes
+6. **Codegen** → Generate output
+
+Changing the order can break correctness guarantees.
+
+## Performance Impact
+
+### Pass Complexity
+
+| Pass | Time Complexity | Notes |
+|------|----------------|-------|
+| Lower | O(n) | Linear in AST size |
+| SSA | O(n + e) | CFG edges |
+| Type Inference | O(n²) | Worst case (unification) |
+| Effect Inference | O(n·d) | d = avg dependencies |
+| Scope Inference | O(n·s) | s = scope count |
+| Codegen | O(n + s) | Linear |
+
+### Typical Times
+
+- Small component (less than 100 LOC): 1-2ms
+- Medium component (100-500 LOC): 2-5ms
+- Large component (500+ LOC): 5-20ms
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Architecture" icon="diagram-project" href="/compiler/architecture">
+    Understand the full pipeline
+  </Card>
+  <Card title="HIR" icon="sitemap" href="/compiler/hir">
+    Learn about the IR
+  </Card>
+  <Card title="Configuration" icon="sliders" href="/compiler/configuration">
+    Enable/disable passes
+  </Card>
+  <Card title="Contributing" icon="code-pull-request" href="/compiler/contributing">
+    Contribute optimizations
+  </Card>
+</CardGroup>

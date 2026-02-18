@@ -1,0 +1,482 @@
+---
+title: Server Components
+description: Build components that render on the server using React Server Components for improved performance and reduced bundle size.
+---
+
+## Overview
+
+React Server Components (RSC) are a new type of component that runs only on the server. They allow you to build components that fetch data, access backend resources, and render to HTML without sending JavaScript to the client.
+
+<Warning>
+React Server Components are a framework feature. They require a framework like Next.js (App Router), or a custom setup with a bundler that supports RSC. They cannot be used in standalone React applications.
+</Warning>
+
+## Server vs Client Components
+
+### Server Components
+
+- Run only on the server
+- Can access backend resources directly
+- Don't increase client bundle size
+- Can't use browser APIs or state
+- Can't use hooks like useState, useEffect
+- Can be async functions
+
+### Client Components
+
+- Run on both server (SSR) and client
+- Can use all React features
+- Include hooks and interactivity
+- Increase bundle size
+- Marked with `'use client'` directive
+
+## Server Component API
+
+From `packages/react/src/ReactServer.js:43`:
+
+```javascript
+export {
+  Children,
+  Fragment,
+  Profiler,
+  StrictMode,
+  Suspense,
+  ViewTransition,
+  cloneElement,
+  createElement,
+  createRef,
+  use,
+  forwardRef,
+  isValidElement,
+  lazy,
+  memo,
+  cache,
+  cacheSignal,
+  useId,
+  useCallback,
+  useDebugValue,
+  useMemo,
+  version,
+  captureOwnerStack,
+};
+```
+
+Server components have a limited API compared to client components. Notable exclusions:
+- No `useState`, `useReducer`
+- No `useEffect`, `useLayoutEffect`
+- No `useContext` (use props instead)
+- No `useTransition`, `useDeferredValue`
+
+## Basic Server Component
+
+```javascript
+// app/ServerComponent.js
+// This is a server component by default (no 'use client')
+
+async function ServerComponent() {
+  // Fetch data directly on the server
+  const data = await fetch('https://api.example.com/data');
+  const json = await data.json();
+  
+  return (
+    <div>
+      <h1>Server Rendered Data</h1>
+      <ul>
+        {json.items.map(item => (
+          <li key={item.id}>{item.name}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+export default ServerComponent;
+```
+
+## Client Component
+
+```javascript
+'use client'; // This directive marks it as a client component
+
+import { useState } from 'react';
+
+function ClientComponent() {
+  const [count, setCount] = useState(0);
+  
+  return (
+    <div>
+      <p>Count: {count}</p>
+      <button onClick={() => setCount(count + 1)}>
+        Increment
+      </button>
+    </div>
+  );
+}
+
+export default ClientComponent;
+```
+
+## Composing Server and Client Components
+
+### Server Component Using Client Component
+
+```javascript
+// app/Page.js (Server Component)
+import ClientCounter from './ClientCounter';
+
+async function Page() {
+  const data = await fetchData();
+  
+  return (
+    <div>
+      <h1>Server Component</h1>
+      <p>This is rendered on the server</p>
+      
+      {/* Client component for interactivity */}
+      <ClientCounter initialValue={data.count} />
+    </div>
+  );
+}
+```
+
+### Passing Server Components as Children
+
+```javascript
+// ClientLayout.js
+'use client';
+
+import { useState } from 'react';
+
+export function ClientLayout({ children }) {
+  const [isOpen, setIsOpen] = useState(true);
+  
+  return (
+    <div>
+      <button onClick={() => setIsOpen(!isOpen)}>
+        Toggle
+      </button>
+      {isOpen && children}
+    </div>
+  );
+}
+
+// Page.js (Server Component)
+import { ClientLayout } from './ClientLayout';
+
+async function Page() {
+  const data = await fetchData();
+  
+  return (
+    <ClientLayout>
+      {/* This server component is passed as children */}
+      <ServerContent data={data} />
+    </ClientLayout>
+  );
+}
+
+async function ServerContent({ data }) {
+  return <div>{data.content}</div>;
+}
+```
+
+## Data Fetching
+
+### Direct Database Access
+
+```javascript
+// app/Users.js
+import { db } from '@/lib/database';
+
+async function Users() {
+  const users = await db.user.findMany({
+    orderBy: { createdAt: 'desc' },
+    take: 10
+  });
+  
+  return (
+    <div>
+      <h2>Recent Users</h2>
+      <ul>
+        {users.map(user => (
+          <li key={user.id}>
+            {user.name} - {user.email}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+```
+
+### API Calls
+
+```javascript
+// app/Posts.js
+
+async function Posts() {
+  const response = await fetch('https://api.example.com/posts', {
+    next: { revalidate: 3600 } // Cache for 1 hour
+  });
+  
+  if (!response.ok) {
+    throw new Error('Failed to fetch posts');
+  }
+  
+  const posts = await response.json();
+  
+  return (
+    <div>
+      {posts.map(post => (
+        <article key={post.id}>
+          <h2>{post.title}</h2>
+          <p>{post.excerpt}</p>
+        </article>
+      ))}
+    </div>
+  );
+}
+```
+
+## React Cache
+
+From `packages/react/src/ReactCacheServer.js`, use `cache` to deduplicate requests:
+
+```javascript
+import { cache } from 'react';
+
+// Cache function results for the duration of a request
+const getUser = cache(async (id) => {
+  const response = await fetch(`https://api.example.com/users/${id}`);
+  return response.json();
+});
+
+async function UserProfile({ userId }) {
+  // This will be cached for the request
+  const user = await getUser(userId);
+  
+  return (
+    <div>
+      <h1>{user.name}</h1>
+      <p>{user.bio}</p>
+    </div>
+  );
+}
+
+async function UserPosts({ userId }) {
+  // This calls the same function - will use cached result
+  const user = await getUser(userId);
+  
+  return (
+    <div>
+      <h2>Posts by {user.name}</h2>
+      {/* Posts content */}
+    </div>
+  );
+}
+```
+
+## Streaming with Suspense
+
+Server components work seamlessly with Suspense for streaming:
+
+```javascript
+import { Suspense } from 'react';
+
+async function SlowComponent() {
+  // Simulate slow data fetch
+  await new Promise(resolve => setTimeout(resolve, 3000));
+  const data = await fetchData();
+  
+  return <div>{data.content}</div>;
+}
+
+function Page() {
+  return (
+    <div>
+      <h1>Page Title</h1>
+      
+      {/* This renders immediately */}
+      <FastContent />
+      
+      {/* This streams in when ready */}
+      <Suspense fallback={<div>Loading slow content...</div>}>
+        <SlowComponent />
+      </Suspense>
+    </div>
+  );
+}
+```
+
+## Server Actions
+
+Server components can use server actions for mutations:
+
+```javascript
+// app/TodoList.js
+import { db } from '@/lib/database';
+
+async function addTodo(formData) {
+  'use server'; // Server action
+  
+  const text = formData.get('text');
+  await db.todo.create({ data: { text } });
+}
+
+async function TodoList() {
+  const todos = await db.todo.findMany();
+  
+  return (
+    <div>
+      <form action={addTodo}>
+        <input name="text" placeholder="Add todo" />
+        <button type="submit">Add</button>
+      </form>
+      
+      <ul>
+        {todos.map(todo => (
+          <li key={todo.id}>{todo.text}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+```
+
+## Error Handling
+
+```javascript
+import { Suspense } from 'react';
+import ErrorBoundary from './ErrorBoundary';
+
+async function DataComponent() {
+  const data = await fetchData();
+  
+  if (!data) {
+    throw new Error('No data available');
+  }
+  
+  return <div>{data.content}</div>;
+}
+
+function Page() {
+  return (
+    <ErrorBoundary fallback={<ErrorFallback />}>
+      <Suspense fallback={<Loading />}>
+        <DataComponent />
+      </Suspense>
+    </ErrorBoundary>
+  );
+}
+```
+
+## Serialization Limits
+
+<Warning>
+Server components can only pass serializable props to client components:
+
+**Allowed:**
+- Primitives (string, number, boolean, null)
+- Arrays and plain objects
+- Date objects
+- React elements
+
+**Not Allowed:**
+- Functions
+- Class instances
+- Symbols
+- Promises (directly)
+</Warning>
+
+```javascript
+// ❌ Won't work
+function ServerComponent() {
+  const handleClick = () => console.log('clicked');
+  return <ClientComponent onClick={handleClick} />;
+}
+
+// ✅ Works - use server actions instead
+async function serverAction() {
+  'use server';
+  console.log('clicked');
+}
+
+function ServerComponent() {
+  return <ClientComponent action={serverAction} />;
+}
+```
+
+## Benefits
+
+1. **Reduced Bundle Size**: Server component code never goes to the client
+2. **Direct Backend Access**: Query databases, read files, use server-only APIs
+3. **Improved Performance**: Less JavaScript to download and parse
+4. **Automatic Code Splitting**: Each server component is a natural split point
+5. **Better Security**: Keep sensitive code and credentials on the server
+
+## Best Practices
+
+1. **Use server components by default**: Only add `'use client'` when needed
+
+2. **Push client boundaries down**: Keep client components as deep in the tree as possible
+
+3. **Pass server components as children**: Compose server and client components effectively
+
+4. **Cache expensive operations**: Use React `cache` for request deduplication
+
+5. **Use Suspense for streaming**: Stream expensive components independently
+
+6. **Handle errors properly**: Use error boundaries with server components
+
+7. **Avoid prop serialization**: Don't pass complex objects to client components
+
+## Limitations
+
+1. **No hooks (except allowed ones)**: Can't use useState, useEffect, etc.
+2. **No browser APIs**: window, document, etc. are not available
+3. **No event handlers**: onClick, onChange, etc. require client components
+4. **No Context**: Can't use React Context (use props or composition)
+5. **Framework dependency**: Requires a supporting framework
+
+## When to Use Client Components
+
+Use `'use client'` when you need:
+- Interactivity (onClick, onChange, etc.)
+- State management (useState, useReducer)
+- Effects (useEffect, useLayoutEffect)
+- Browser APIs (localStorage, WebSocket, etc.)
+- Context (useContext)
+- Lifecycle methods
+
+## Server Component Hooks
+
+Allowed hooks in server components:
+- `useId`: Generate unique IDs
+- `useCallback`: Memoize callbacks
+- `useMemo`: Memoize values
+- `useDebugValue`: Add debug labels
+- `cache`: Cache function results
+
+```javascript
+import { cache, useMemo } from 'react';
+
+const getData = cache(async (id) => {
+  return await db.data.findUnique({ where: { id } });
+});
+
+async function ServerComponent({ id }) {
+  const data = await getData(id);
+  
+  // useMemo works in server components
+  const processed = useMemo(() => {
+    return processData(data);
+  }, [data]);
+  
+  return <div>{processed.content}</div>;
+}
+```
+
+## See Also
+
+- [Suspense](/advanced/suspense) - Streaming and loading states
+- [Server Actions](/guides/server-actions) - Mutations in server components
+- [Data Fetching](/guides/data-fetching) - Patterns for loading data

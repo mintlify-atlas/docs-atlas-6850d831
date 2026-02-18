@@ -1,0 +1,587 @@
+---
+title: useInsertionEffect
+description: Insert styles into the DOM before any layout effects fire
+---
+
+`useInsertionEffect` is a version of `useEffect` that fires before any DOM mutations.
+
+```typescript
+function useInsertionEffect(
+  effect: () => (() => void) | void,
+  deps: Array<mixed> | void | null
+): void
+```
+
+<Warning>
+`useInsertionEffect` is for CSS-in-JS library authors. Unless you're working on a CSS-in-JS library and need a place to inject styles, you probably want `useEffect` or `useLayoutEffect` instead.
+</Warning>
+
+## Parameters
+
+<ParamField path="effect" type="() => (() => void) | void" required>
+  The function with your Effect's logic. Your effect function can optionally return a cleanup function.
+  
+  - React will call your effect function before any DOM mutations
+  - React will call your cleanup function before the component is removed
+  - If dependencies change, React will run cleanup, then run your effect with new values
+</ParamField>
+
+<ParamField path="deps" type="Array<mixed> | void | null">
+  The list of all reactive values referenced inside the effect code. Works the same as `useEffect` dependencies.
+  
+  - If omitted, the effect runs after every render
+  - If `[]` (empty array), the effect runs only once (on mount)
+  - If `[dep1, dep2]`, the effect runs when any dependency changes
+</ParamField>
+
+## Returns
+
+`useInsertionEffect` returns `undefined`.
+
+## Usage
+
+### Injecting dynamic styles from CSS-in-JS libraries
+
+Traditionally, you would style React components using plain CSS:
+
+```javascript
+// In your CSS file
+.button {
+  background: blue;
+}
+
+// In your component
+function Button() {
+  return <button className="button">Click me</button>;
+}
+```
+
+Some teams prefer to author styles directly in JavaScript code instead of writing CSS files. This usually requires using a CSS-in-JS library or tool. There are three common approaches:
+
+1. Static extraction to CSS files with a compiler
+2. Inline styles: `<div style={{ ... }}>`
+3. Runtime injection of `<style>` tags
+
+If you use CSS-in-JS with runtime injection, use `useInsertionEffect`:
+
+```javascript
+import { useInsertionEffect } from 'react';
+
+// Inside your CSS-in-JS library
+let isInserted = new Set();
+
+function useCSS(rule) {
+  useInsertionEffect(() => {
+    // As before, prevent duplicate injection
+    if (!isInserted.has(rule)) {
+      isInserted.add(rule);
+      document.head.appendChild(getStyleForRule(rule));
+    }
+  });
+  return rule;
+}
+
+function Button() {
+  const className = useCSS('button { background: blue; }');
+  return <button className={className}>Click me</button>;
+}
+```
+
+<Note>
+`useInsertionEffect` is better than injecting styles during render or in `useLayoutEffect` because it ensures that by the time other Effects run in your components, the `<style>` tags have already been injected.
+</Note>
+
+## How CSS-in-JS libraries use this
+
+### Basic style injection
+
+```javascript
+import { useInsertionEffect } from 'react';
+
+const stylesCache = new Map();
+
+function createStyleElement(css) {
+  const style = document.createElement('style');
+  style.textContent = css;
+  return style;
+}
+
+function useStyles(css) {
+  useInsertionEffect(() => {
+    if (!stylesCache.has(css)) {
+      const styleElement = createStyleElement(css);
+      document.head.appendChild(styleElement);
+      stylesCache.set(css, styleElement);
+    }
+    
+    return () => {
+      const styleElement = stylesCache.get(css);
+      if (styleElement) {
+        styleElement.remove();
+        stylesCache.delete(css);
+      }
+    };
+  }, [css]);
+}
+
+// Usage
+function Component() {
+  useStyles(`
+    .my-component {
+      background: blue;
+      color: white;
+    }
+  `);
+  
+  return <div className="my-component">Styled component</div>;
+}
+```
+
+### CSS-in-JS with dynamic values
+
+```javascript
+import { useInsertionEffect } from 'react';
+
+let styleId = 0;
+const injectedStyles = new Map();
+
+function useInlineStyles(styles) {
+  const classNameRef = useRef(null);
+  
+  if (!classNameRef.current) {
+    classNameRef.current = `css-${styleId++}`;
+  }
+  
+  const className = classNameRef.current;
+  
+  useInsertionEffect(() => {
+    const css = `
+      .${className} {
+        ${Object.entries(styles)
+          .map(([key, value]) => `${toKebabCase(key)}: ${value};`)
+          .join('\n')}
+      }
+    `;
+    
+    if (!injectedStyles.has(className)) {
+      const style = document.createElement('style');
+      style.textContent = css;
+      document.head.appendChild(style);
+      injectedStyles.set(className, style);
+    } else {
+      injectedStyles.get(className).textContent = css;
+    }
+    
+    return () => {
+      const style = injectedStyles.get(className);
+      if (style) {
+        style.remove();
+        injectedStyles.delete(className);
+      }
+    };
+  }, [className, JSON.stringify(styles)]);
+  
+  return className;
+}
+
+function toKebabCase(str) {
+  return str.replace(/[A-Z]/g, letter => `-${letter.toLowerCase()}`);
+}
+
+// Usage
+function Button({ primary }) {
+  const className = useInlineStyles({
+    background: primary ? 'blue' : 'gray',
+    color: 'white',
+    padding: '10px 20px',
+    border: 'none',
+    borderRadius: '4px'
+  });
+  
+  return <button className={className}>Click me</button>;
+}
+```
+
+### Styled components pattern
+
+```javascript
+import { useInsertionEffect, useRef } from 'react';
+
+function styled(Component, stylesFn) {
+  return function StyledComponent(props) {
+    const classNameRef = useRef(null);
+    
+    if (!classNameRef.current) {
+      classNameRef.current = `styled-${Math.random().toString(36).slice(2)}`;
+    }
+    
+    const className = classNameRef.current;
+    const styles = stylesFn(props);
+    
+    useInsertionEffect(() => {
+      const css = `
+        .${className} {
+          ${styles}
+        }
+      `;
+      
+      const style = document.createElement('style');
+      style.textContent = css;
+      document.head.appendChild(style);
+      
+      return () => style.remove();
+    }, [className, styles]);
+    
+    return <Component {...props} className={className} />;
+  };
+}
+
+// Usage
+const StyledButton = styled(
+  'button',
+  (props) => `
+    background: ${props.primary ? 'blue' : 'gray'};
+    color: white;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    
+    &:hover {
+      opacity: 0.8;
+    }
+  `
+);
+
+function App() {
+  return (
+    <>
+      <StyledButton>Normal</StyledButton>
+      <StyledButton primary>Primary</StyledButton>
+    </>
+  );
+}
+```
+
+## Effect Timing Comparison
+
+<Tabs>
+  <Tab title="useInsertionEffect">
+    ```javascript
+    function Component() {
+      useInsertionEffect(() => {
+        console.log('1. useInsertionEffect');
+        // Runs before DOM mutations
+        // Perfect for injecting styles
+      });
+      
+      return <div>Component</div>;
+    }
+    ```
+    
+    **Timing:** Render → useInsertionEffect → DOM mutations → Layout effects → Paint
+    
+    **Use for:** Injecting `<style>` tags for CSS-in-JS
+  </Tab>
+  <Tab title="useLayoutEffect">
+    ```javascript
+    function Component() {
+      useLayoutEffect(() => {
+        console.log('2. useLayoutEffect');
+        // Runs after DOM mutations, before paint
+        // Can read layout, cause re-layout
+      });
+      
+      return <div>Component</div>;
+    }
+    ```
+    
+    **Timing:** Render → DOM mutations → useLayoutEffect → Paint
+    
+    **Use for:** Measuring DOM, synchronous DOM mutations
+  </Tab>
+  <Tab title="useEffect">
+    ```javascript
+    function Component() {
+      useEffect(() => {
+        console.log('3. useEffect');
+        // Runs after paint
+        // User can see updates before effect runs
+      });
+      
+      return <div>Component</div>;
+    }
+    ```
+    
+    **Timing:** Render → DOM mutations → Paint → useEffect
+    
+    **Use for:** Data fetching, subscriptions, most side effects
+  </Tab>
+</Tabs>
+
+## TypeScript
+
+```typescript
+import { useInsertionEffect } from 'react';
+
+function useCSS(css: string): void {
+  useInsertionEffect(() => {
+    const style = document.createElement('style');
+    style.textContent = css;
+    document.head.appendChild(style);
+    
+    return () => {
+      style.remove();
+    };
+  }, [css]);
+}
+
+// With style object
+interface StyleObject {
+  [key: string]: string | number;
+}
+
+function useInlineStyles(styles: StyleObject): string {
+  const className = `css-${Math.random().toString(36).slice(2)}`;
+  
+  useInsertionEffect(() => {
+    const css = Object.entries(styles)
+      .map(([key, value]) => `${key}: ${value};`)
+      .join('\n');
+    
+    const style = document.createElement('style');
+    style.textContent = `.${className} { ${css} }`;
+    document.head.appendChild(style);
+    
+    return () => style.remove();
+  }, [className, styles]);
+  
+  return className;
+}
+```
+
+## Troubleshooting
+
+### Why not just use useEffect or useLayoutEffect?
+
+```javascript
+// ❌ Using useLayoutEffect for styles
+function Component() {
+  useLayoutEffect(() => {
+    // Injects styles AFTER layout has been calculated
+    // Can cause styles to be applied late, causing flicker
+    injectStyles();
+  });
+}
+
+// ✅ Using useInsertionEffect for styles
+function Component() {
+  useInsertionEffect(() => {
+    // Injects styles BEFORE layout is calculated
+    // Ensures styles are ready when component renders
+    injectStyles();
+  });
+}
+```
+
+### Can I read DOM in useInsertionEffect?
+
+No, you cannot read from the DOM in `useInsertionEffect` because the DOM hasn't been updated yet:
+
+```javascript
+// ❌ Don't read DOM in useInsertionEffect
+function Component() {
+  const ref = useRef(null);
+  
+  useInsertionEffect(() => {
+    console.log(ref.current); // null! DOM not ready yet
+  });
+  
+  return <div ref={ref}>Content</div>;
+}
+
+// ✅ Read DOM in useLayoutEffect
+function Component() {
+  const ref = useRef(null);
+  
+  useLayoutEffect(() => {
+    console.log(ref.current); // <div>Content</div>
+  });
+  
+  return <div ref={ref}>Content</div>;
+}
+```
+
+### I'm not building a CSS-in-JS library - do I need this?
+
+No! Unless you're authoring a CSS-in-JS library, you should use:
+- `useEffect` for most side effects
+- `useLayoutEffect` for measuring DOM or synchronous mutations
+- Plain CSS or CSS modules for styling
+
+```javascript
+// ❌ Don't use useInsertionEffect for regular effects
+function Component() {
+  useInsertionEffect(() => {
+    fetchData(); // Wrong hook!
+  });
+}
+
+// ✅ Use useEffect for regular effects
+function Component() {
+  useEffect(() => {
+    fetchData();
+  });
+}
+```
+
+## Best Practices
+
+### Only for CSS-in-JS libraries
+
+`useInsertionEffect` is a specialized hook for library authors:
+
+```javascript
+// ✅ Good: CSS-in-JS library
+function useStyles(css) {
+  useInsertionEffect(() => {
+    injectStylesheet(css);
+  }, [css]);
+}
+
+// ❌ Bad: Regular application code
+function Component() {
+  useInsertionEffect(() => {
+    // You probably want useEffect or useLayoutEffect
+    doSomething();
+  });
+}
+```
+
+### Prevent duplicate injections
+
+```javascript
+const injectedStyles = new Set();
+
+function useCSS(css) {
+  useInsertionEffect(() => {
+    if (!injectedStyles.has(css)) {
+      const style = document.createElement('style');
+      style.textContent = css;
+      document.head.appendChild(style);
+      injectedStyles.add(css);
+    }
+  }, [css]);
+}
+```
+
+### Clean up injected styles
+
+```javascript
+function useCSS(css) {
+  useInsertionEffect(() => {
+    const style = document.createElement('style');
+    style.textContent = css;
+    document.head.appendChild(style);
+    
+    // Clean up when component unmounts
+    return () => {
+      style.remove();
+    };
+  }, [css]);
+}
+```
+
+## When to use useInsertionEffect
+
+Use `useInsertionEffect` when:
+- ✅ Building a CSS-in-JS library
+- ✅ Injecting `<style>` tags dynamically
+- ✅ Need to inject styles before layout is calculated
+
+Use `useLayoutEffect` when:
+- ✅ Measuring DOM elements
+- ✅ Reading layout (getBoundingClientRect, offsetHeight, etc.)
+- ✅ Synchronous DOM mutations before paint
+
+Use `useEffect` when:
+- ✅ Everything else!
+- ✅ Data fetching
+- ✅ Setting up subscriptions
+- ✅ Logging and analytics
+- ✅ Most side effects
+
+## Real-World Example
+
+Here's how a CSS-in-JS library might implement a complete solution:
+
+```javascript
+import { useInsertionEffect, useRef } from 'react';
+
+class StyleSheet {
+  constructor() {
+    this.styles = new Map();
+    this.sheet = this.createStyleSheet();
+  }
+  
+  createStyleSheet() {
+    const style = document.createElement('style');
+    document.head.appendChild(style);
+    return style.sheet;
+  }
+  
+  insert(className, css) {
+    if (!this.styles.has(className)) {
+      const index = this.sheet.cssRules.length;
+      this.sheet.insertRule(`.${className} { ${css} }`, index);
+      this.styles.set(className, index);
+    }
+    return className;
+  }
+  
+  delete(className) {
+    const index = this.styles.get(className);
+    if (index !== undefined) {
+      this.sheet.deleteRule(index);
+      this.styles.delete(className);
+    }
+  }
+}
+
+const globalStyleSheet = new StyleSheet();
+let idCounter = 0;
+
+export function useCSS(css) {
+  const classNameRef = useRef(null);
+  
+  if (!classNameRef.current) {
+    classNameRef.current = `css-${idCounter++}`;
+  }
+  
+  const className = classNameRef.current;
+  
+  useInsertionEffect(() => {
+    globalStyleSheet.insert(className, css);
+    
+    return () => {
+      globalStyleSheet.delete(className);
+    };
+  }, [className, css]);
+  
+  return className;
+}
+
+// Usage
+function Button({ children, primary }) {
+  const className = useCSS(`
+    background: ${primary ? 'blue' : 'gray'};
+    color: white;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+  `);
+  
+  return <button className={className}>{children}</button>;
+}
+```

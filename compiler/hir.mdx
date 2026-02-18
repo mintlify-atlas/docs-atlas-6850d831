@@ -1,0 +1,546 @@
+---
+title: HIR (High-level Intermediate Representation)
+description: Understanding React Compiler's internal representation
+---
+
+# HIR: High-level Intermediate Representation
+
+HIR (High-level Intermediate Representation) is React Compiler's primary internal data structure for representing and analyzing JavaScript code.
+
+## What is HIR?
+
+HIR is a **control-flow graph (CFG)** representation that:
+- Preserves high-level JavaScript constructs
+- Makes control flow explicit
+- Enables precise dataflow analysis
+- Supports SSA (Static Single Assignment) form
+
+The name is inspired by Rust Compiler's HIR, but React Compiler's HIR is even more high-level, distinguishing between similar constructs like:
+- `if` vs ternary (`? :`) vs logical (`&&`, `||`)
+- `for` vs `while` vs `for..of` loops
+- Method calls vs function calls
+
+## HIR Structure
+
+### HIRFunction
+
+The top-level structure representing a compiled function:
+
+```typescript
+interface HIRFunction {
+  // Unique identifier
+  id: number;
+  
+  // Function metadata
+  fnType: ReactFunctionType; // 'Component' | 'Hook' | 'Other'
+  async: boolean;
+  generator: boolean;
+  
+  // Parameters
+  params: Array<Place | SpreadPattern>;
+  
+  // Variables captured from outer scope
+  context: Array<Place>;
+  
+  // Return value place
+  returns: Place;
+  
+  // Control flow graph
+  body: {
+    blocks: Map<BlockId, BasicBlock>;
+    entry: BlockId; // Entry block
+  };
+  
+  // Source information
+  loc: SourceLocation;
+  directives: Array<string>;
+}
+```
+
+### BasicBlock
+
+A sequence of instructions with a single terminator:
+
+```typescript
+interface BasicBlock {
+  // Unique identifier
+  id: BlockId;
+  
+  // Block type
+  kind: BlockKind; // 'block' | 'loop' | 'value' | 'sequence' | 'catch'
+  
+  // Instructions
+  instructions: Array<Instruction>;
+  
+  // Control flow
+  terminal: Terminal;
+  
+  // Predecessor blocks
+  preds: Set<BlockId>;
+  
+  // Phi nodes (SSA)
+  phis: Set<Phi>;
+}
+```
+
+**Block Kinds:**
+
+- `block`: Regular sequential block
+- `loop`: Loop header/test block
+- `value`: Block producing a value (ternary/logical branches)
+- `sequence`: Sequence expression block
+- `catch`: Exception handler block
+
+### Instruction
+
+A single operation:
+
+```typescript
+interface Instruction {
+  // Unique ID
+  id: InstructionId;
+  
+  // Left-hand side (assignment target)
+  lvalue: Place;
+  
+  // Right-hand side (operation)
+  value: InstructionValue;
+  
+  // Aliasing/mutation effects (from inference)
+  effects: Array<AliasingEffect> | null;
+  
+  // Optional reactive scope
+  scope: ReactiveScope | null;
+  
+  // Source location
+  loc: SourceLocation;
+}
+```
+
+### InstructionValue
+
+The operation performed by an instruction:
+
+```typescript
+type InstructionValue =
+  // Variables
+  | LoadLocal
+  | StoreLocal
+  | LoadContext
+  | StoreContext
+  | LoadGlobal
+  | DeclareLocal
+  | DeclareContext
+  
+  // Primitives
+  | Primitive
+  | TemplateLiteral
+  
+  // Operations
+  | BinaryExpression
+  | UnaryExpression
+  | UpdateExpression
+  
+  // Calls
+  | CallExpression
+  | MethodCall
+  | NewExpression
+  
+  // Objects/Arrays
+  | ObjectExpression
+  | ObjectMethod
+  | ArrayExpression
+  | SpreadPattern
+  
+  // Properties
+  | PropertyLoad
+  | PropertyStore
+  | PropertyDelete
+  | ComputedLoad
+  | ComputedStore
+  | ComputedDelete
+  
+  // Destructuring
+  | Destructure
+  | ArrayPattern
+  | ObjectPattern
+  
+  // Functions
+  | FunctionExpression
+  | ArrowFunctionExpression
+  
+  // JSX
+  | JsxExpression
+  | JsxFragment
+  
+  // Special
+  | SequenceExpression
+  | ConditionalExpression
+  | LogicalExpression
+  | OptionalExpression
+  | RegExpLiteral
+  | TypeCastExpression;
+```
+
+### Terminal
+
+Control flow at the end of a block:
+
+```typescript
+type Terminal =
+  // Unconditional
+  | { kind: 'goto'; block: BlockId }
+  | { kind: 'return'; value: Place }
+  | { kind: 'throw'; value: Place }
+  
+  // Conditional
+  | { kind: 'if'; test: Place; consequent: BlockId; alternate: BlockId }
+  | { kind: 'branch'; test: Place; consequent: BlockId; alternate: BlockId }
+  
+  // Ternary (produces value)
+  | { kind: 'ternary'; test: Place; consequent: BlockId; alternate: BlockId; fallthrough: BlockId }
+  
+  // Logical (produces value)
+  | { kind: 'logical'; test: Place; truthy: BlockId; falsy: BlockId; fallthrough: BlockId }
+  
+  // Optional chaining
+  | { kind: 'optional'; test: Place; consequent: BlockId; fallthrough: BlockId }
+  
+  // Loops
+  | { kind: 'for'; init: BlockId; test: BlockId; update: BlockId; body: BlockId; fallthrough: BlockId }
+  | { kind: 'for-of'; init: Place; test: BlockId; loop: BlockId; fallthrough: BlockId }
+  | { kind: 'while'; test: BlockId; loop: BlockId; fallthrough: BlockId }
+  | { kind: 'do-while'; loop: BlockId; test: BlockId; fallthrough: BlockId }
+  
+  // Switch
+  | { kind: 'switch'; test: Place; cases: Array<SwitchCase>; fallthrough: BlockId }
+  
+  // Exceptions
+  | { kind: 'try'; block: BlockId; handler: BlockId; finalizer: BlockId | null }
+  | { kind: 'maybe-throw'; continuation: BlockId; handler: BlockId };
+```
+
+### Place
+
+A reference to a value:
+
+```typescript
+interface Place {
+  kind: 'Identifier';
+  
+  // Identifier information
+  identifier: {
+    id: IdentifierId; // Unique ID
+    name: Identifier | null; // Optional name
+    mutableRange: MutableRange; // When value can be mutated
+    scope: Scope | null; // Declaring scope
+    type: Type; // Inferred type
+  };
+  
+  // Usage effect
+  effect: Effect; // Read, Store, Capture, etc.
+  
+  // Reactive properties
+  reactive: {
+    kind: 'Reactive' | 'NonReactive';
+  };
+  
+  // Source location
+  loc: SourceLocation;
+}
+```
+
+### Phi Nodes
+
+SSA merge points:
+
+```typescript
+interface Phi {
+  // Result place
+  place: Place;
+  
+  // Input operands from predecessor blocks
+  operands: Map<BlockId, Place>;
+}
+```
+
+## Example HIR
+
+### Simple Function
+
+**Input:**
+```javascript
+function add(a, b) {
+  return a + b;
+}
+```
+
+**HIR:**
+```
+add(a$0, b$1): $5
+
+bb0 (block):
+  [1] $2 = LoadLocal a$0
+  [2] $3 = LoadLocal b$1
+  [3] $4 = Binary $2 + $3
+  [4] Return $4
+```
+
+### Conditional Function
+
+**Input:**
+```javascript
+function max(a, b) {
+  if (a > b) {
+    return a;
+  }
+  return b;
+}
+```
+
+**HIR:**
+```
+max(a$0, b$1): $9
+
+bb0 (block):
+  [1] $4 = LoadLocal a$0
+  [2] $5 = LoadLocal b$1
+  [3] $6 = Binary $4 > $5
+  [4] If ($6) then:bb1 else:bb2 fallthrough=bb2
+
+bb1 (block):
+  predecessor blocks: bb0
+  [5] $7 = LoadLocal a$0
+  [6] Return $7
+
+bb2 (block):
+  predecessor blocks: bb0
+  [7] $8 = LoadLocal b$1
+  [8] Return $8
+```
+
+### Loop Example
+
+**Input:**
+```javascript
+function sum(items) {
+  let total = 0;
+  for (const item of items) {
+    total = total + item;
+  }
+  return total;
+}
+```
+
+**HIR (simplified):**
+```
+sum(items$0): $15
+
+bb0 (block):
+  [1] $2 = 0
+  [2] $3 = StoreLocal Let total$1 = $2
+  [3] $4 = LoadLocal items$0
+  [4] $5 = GetIterator $4
+  [5] For-of iterator=$5 test:bb1 loop:bb2 fallthrough:bb3
+
+bb1 (loop test):
+  [6] $6 = IteratorNext $5
+  [7] If ($6.done) then:bb3 else:bb2
+
+bb2 (loop body):
+  [8] item$7 = $6.value
+  [9] $8 = LoadLocal total$1
+  [10] $9 = LoadLocal item$7
+  [11] $10 = Binary $8 + $9
+  [12] $11 = StoreLocal Let total$1 = $10
+  [13] Goto bb1
+
+bb3 (fallthrough):
+  [14] $12 = LoadLocal total$1
+  [15] Return $12
+```
+
+## SSA Form
+
+After `EnterSSA` pass, HIR is converted to SSA:
+
+**Before SSA:**
+```
+bb0:
+  [1] x = LoadLocal a
+  [2] If (test) then:bb1 else:bb2
+
+bb1:
+  [3] x = 1
+  [4] Goto bb3
+
+bb2:
+  [5] x = 2
+  [6] Goto bb3
+
+bb3:
+  [7] result = x + 10
+  [8] Return result
+```
+
+**After SSA:**
+```
+bb0:
+  [1] x$0 = LoadLocal a
+  [2] If (test) then:bb1 else:bb2
+
+bb1:
+  [3] x$1 = 1
+  [4] Goto bb3
+
+bb2:
+  [5] x$2 = 2
+  [6] Goto bb3
+
+bb3:
+  phis:
+    x$3 = phi(bb1: x$1, bb2: x$2)
+  [7] result$4 = x$3 + 10
+  [8] Return result$4
+```
+
+## Effects System
+
+After effect inference, instructions are annotated:
+
+```
+[1] $2:TPrimitive = LoadLocal props$0:TObject
+    @aliasingEffects=<>
+    
+[2] $3:TPrimitive = PropertyLoad $2.value
+    @aliasingEffects=<Alias $2 -> $3>
+    
+[3] $4:TPrimitive = Binary $3 * 2
+    @aliasingEffects=<>
+    
+[4] $5:TObject = JsxExpression <div>{$4}</div>
+    @aliasingEffects=<Render $4, Capture $4 -> $5>
+```
+
+**Effect Annotations:**
+
+- `Alias a -> b`: b aliases a
+- `Capture a -> b`: b captures a
+- `Mutate a`: a is mutated
+- `Freeze a`: a is frozen (immutable)
+- `Render a`: a is used in render context
+- `Impure a`: a contains impure value
+
+## Reactive Scopes in HIR
+
+After scope inference, instructions are labeled:
+
+```
+bb0 (block):
+  scope [1, 4)
+  [1] $2 = LoadLocal props$0
+  [2] $3 = PropertyLoad $2.count
+  [3] $4 = Binary $3 * 2
+  
+  scope [4, 6)
+  [4] $5 = JsxExpression <div>{$4}</div>
+  [5] Return $5
+```
+
+Scope `[1, 4)` depends on `props.count`  
+Scope `[4, 6)` depends on `$4`
+
+## Type Annotations
+
+After type inference:
+
+```typescript
+// Primitive types
+$0:TPrimitive = 42
+$1:TPrimitive = "hello"
+$2:TPrimitive = true
+
+// Object types
+$3:TObject<BuiltInObject> = ObjectExpression {}
+$4:TObject<BuiltInArray> = ArrayExpression []
+
+// Function types
+$5:TFunction<BuiltInUseState>:TObject<BuiltInUseState> = Call useState(0)
+
+// Hook return types
+$6:TObject<BuiltInUseState> = Destructure $5
+$7:TFunction<BuiltInSetState>:TPrimitive = Destructure $5
+```
+
+## Working with HIR
+
+### Traversing the CFG
+
+```typescript
+function visitBlocks(fn: HIRFunction, visitor: (block: BasicBlock) => void) {
+  const visited = new Set<BlockId>();
+  const queue = [fn.body.entry];
+  
+  while (queue.length > 0) {
+    const blockId = queue.shift()!;
+    if (visited.has(blockId)) continue;
+    visited.add(blockId);
+    
+    const block = fn.body.blocks.get(blockId)!;
+    visitor(block);
+    
+    // Add successors to queue
+    for (const successor of getSuccessors(block.terminal)) {
+      queue.push(successor);
+    }
+  }
+}
+```
+
+### Finding Dependencies
+
+```typescript
+function findDependencies(place: Place, hir: HIRFunction): Set<Place> {
+  const deps = new Set<Place>();
+  
+  for (const [, block] of hir.body.blocks) {
+    for (const instr of block.instructions) {
+      if (instr.lvalue.identifier.id === place.identifier.id) {
+        // Found definition, collect operands
+        for (const operand of getOperands(instr.value)) {
+          deps.add(operand);
+        }
+      }
+    }
+  }
+  
+  return deps;
+}
+```
+
+## HIR Validation
+
+The compiler includes several HIR validation passes:
+
+- `assertConsistentIdentifiers`: All identifier references are valid
+- `assertTerminalSuccessorsExist`: Terminal successors are in the CFG
+- `assertTerminalPredsExist`: Predecessor sets are correct
+- `assertValidBlockNesting`: Block nesting is well-formed
+- `assertValidMutableRanges`: Mutable ranges don't overlap incorrectly
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Architecture" icon="diagram-project" href="/compiler/architecture">
+    Understand the compiler pipeline
+  </Card>
+  <Card title="Optimization Passes" icon="wand-magic-sparkles" href="/compiler/optimization-passes">
+    Learn about HIR transformations
+  </Card>
+  <Card title="Contributing" icon="code-pull-request" href="/compiler/contributing">
+    Contribute to the compiler
+  </Card>
+  <Card title="How It Works" icon="gear" href="/compiler/how-it-works">
+    High-level compilation overview
+  </Card>
+</CardGroup>

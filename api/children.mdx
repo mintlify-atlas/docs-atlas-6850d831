@@ -1,0 +1,581 @@
+---
+title: React.Children
+description: Utilities for working with the props.children opaque data structure
+---
+
+The `React.Children` API provides utilities for working with the `props.children` data structure. These methods handle the complexity of children being a single element, an array, or other data types.
+
+<Note>
+In modern React, you can often use regular JavaScript array methods by converting children to an array with `Children.toArray()` first, or use the methods directly.
+</Note>
+
+## Children.map()
+
+Invoke a function on every immediate child and return an array of results.
+
+```typescript
+function map(
+  children: ReactNode,
+  fn: (child: ReactNode, index: number) => ReactNode,
+  context?: any
+): ReactNode[] | null
+```
+
+<ParamField path="children" type="ReactNode" required>
+  The `props.children` value passed to your component. Can be:
+  - A single React element
+  - An array of elements
+  - A string, number, or other renderable value
+  - `null`, `undefined`, or `false`
+  - Nested arrays or fragments
+</ParamField>
+
+<ParamField path="fn" type="function" required>
+  The function to call for each child. It receives:
+  - `child` - The current child element
+  - `index` - The index of the child in the flat list
+  
+  Return a React node to include in the output array, or `null`/`undefined` to exclude it.
+</ParamField>
+
+<ParamField path="context" type="any">
+  Optional context value to use as `this` when calling the function.
+</ParamField>
+
+**Returns:** An array of mapped children, or `null`/`undefined` if `children` was `null`/`undefined`.
+
+### Usage
+
+**Basic mapping:**
+
+```javascript
+import { Children } from 'react';
+
+function List({ children }) {
+  return (
+    <ul>
+      {Children.map(children, child => (
+        <li>{child}</li>
+      ))}
+    </ul>
+  );
+}
+
+// Usage:
+<List>
+  <span>Item 1</span>
+  <span>Item 2</span>
+  <span>Item 3</span>
+</List>
+```
+
+**Adding props to children:**
+
+```javascript
+function HighlightChildren({ color, children }) {
+  return Children.map(children, child => {
+    if (React.isValidElement(child)) {
+      return React.cloneElement(child, {
+        style: { ...child.props.style, color }
+      });
+    }
+    return child;
+  });
+}
+```
+
+**With index:**
+
+```javascript
+function NumberedList({ children }) {
+  return (
+    <div>
+      {Children.map(children, (child, index) => (
+        <div>
+          <span>{index + 1}. </span>
+          {child}
+        </div>
+      ))}
+    </div>
+  );
+}
+```
+
+**Filtering and mapping:**
+
+```javascript
+function FilteredList({ children, filter }) {
+  return Children.map(children, child => {
+    if (React.isValidElement(child) && child.type === filter) {
+      return child;
+    }
+    return null; // Filtered out
+  });
+}
+```
+
+### Key Handling
+
+`Children.map()` automatically handles keys for you:
+
+- Keys are automatically assigned to returned elements
+- If the original child has a key, it's preserved and used as part of the new key
+- You don't need to manually add keys to the returned elements
+
+### Flattening
+
+`Children.map()` automatically flattens nested structures:
+
+```javascript
+const children = [
+  <div key="1">First</div>,
+  [<div key="2">Second</div>, <div key="3">Third</div>],
+  <div key="4">Fourth</div>
+];
+
+// Iterates over all 4 elements, flattened
+Children.map(children, (child, index) => {
+  console.log(index); // 0, 1, 2, 3
+  return child;
+});
+```
+
+## Children.forEach()
+
+Iterate over children without returning an array.
+
+```typescript
+function forEach(
+  children: ReactNode,
+  fn: (child: ReactNode, index: number) => void,
+  context?: any
+): void
+```
+
+<ParamField path="children" type="ReactNode" required>
+  The children to iterate over.
+</ParamField>
+
+<ParamField path="fn" type="function" required>
+  Function to call for each child. Receives `child` and `index` as arguments.
+</ParamField>
+
+<ParamField path="context" type="any">
+  Optional `this` context for the function.
+</ParamField>
+
+**Returns:** `undefined`
+
+### Usage
+
+```javascript
+import { Children } from 'react';
+
+function logChildren({ children }) {
+  Children.forEach(children, (child, index) => {
+    console.log(`Child ${index}:`, child);
+  });
+  
+  return <div>{children}</div>;
+}
+```
+
+**Collecting information:**
+
+```javascript
+function countTypes({ children }) {
+  const counts = {};
+  
+  Children.forEach(children, child => {
+    if (React.isValidElement(child)) {
+      const type = child.type.name || child.type;
+      counts[type] = (counts[type] || 0) + 1;
+    }
+  });
+  
+  console.log('Component counts:', counts);
+  return <div>{children}</div>;
+}
+```
+
+**Side effects:**
+
+```javascript
+function ValidateChildren({ children }) {
+  let hasError = false;
+  
+  Children.forEach(children, child => {
+    if (!React.isValidElement(child)) {
+      hasError = true;
+      console.error('Invalid child:', child);
+    }
+  });
+  
+  if (hasError) {
+    return <div>Error: Invalid children</div>;
+  }
+  
+  return <div>{children}</div>;
+}
+```
+
+## Children.count()
+
+Return the number of children.
+
+```typescript
+function count(children: ReactNode): number
+```
+
+<ParamField path="children" type="ReactNode" required>
+  The children to count.
+</ParamField>
+
+**Returns:** The total number of children after flattening nested structures.
+
+### Usage
+
+```javascript
+import { Children } from 'react';
+
+function CountDisplay({ children }) {
+  const count = Children.count(children);
+  
+  return (
+    <div>
+      <p>Number of children: {count}</p>
+      {children}
+    </div>
+  );
+}
+
+// Examples:
+Children.count(<div />);                    // 1
+Children.count([<div />, <span />]);       // 2
+Children.count(null);                       // 0
+Children.count(undefined);                  // 0
+Children.count([<div />, [<span />]]);     // 2 (flattened)
+Children.count('text');                     // 1
+```
+
+**Conditional rendering based on count:**
+
+```javascript
+function RequireMinChildren({ children, min = 1 }) {
+  const count = Children.count(children);
+  
+  if (count < min) {
+    return <div>Error: Need at least {min} children</div>;
+  }
+  
+  return <div>{children}</div>;
+}
+```
+
+**Dynamic layout:**
+
+```javascript
+function DynamicGrid({ children }) {
+  const count = Children.count(children);
+  const columns = count <= 2 ? count : 3;
+  
+  return (
+    <div style={{ 
+      display: 'grid',
+      gridTemplateColumns: `repeat(${columns}, 1fr)` 
+    }}>
+      {children}
+    </div>
+  );
+}
+```
+
+## Children.toArray()
+
+Convert children to a flat array with keys assigned.
+
+```typescript
+function toArray(children: ReactNode): ReactNode[]
+```
+
+<ParamField path="children" type="ReactNode" required>
+  The children to convert to an array.
+</ParamField>
+
+**Returns:** A flat array of children. Returns an empty array if `children` is `null` or `undefined`.
+
+### Usage
+
+**Basic conversion:**
+
+```javascript
+import { Children } from 'react';
+
+function ArrayOperations({ children }) {
+  const childArray = Children.toArray(children);
+  
+  // Now you can use array methods
+  const reversed = childArray.reverse();
+  const sliced = childArray.slice(0, 3);
+  const filtered = childArray.filter((child, i) => i % 2 === 0);
+  
+  return <div>{filtered}</div>;
+}
+```
+
+**Sorting children:**
+
+```javascript
+function SortableList({ children, sortBy }) {
+  const childArray = Children.toArray(children);
+  
+  const sorted = childArray.sort((a, b) => {
+    if (!React.isValidElement(a) || !React.isValidElement(b)) {
+      return 0;
+    }
+    return a.props[sortBy] - b.props[sortBy];
+  });
+  
+  return <div>{sorted}</div>;
+}
+
+// Usage:
+<SortableList sortBy="order">
+  <Item order={3}>Third</Item>
+  <Item order={1}>First</Item>
+  <Item order={2}>Second</Item>
+</SortableList>
+```
+
+**Inserting elements:**
+
+```javascript
+function AddDividers({ children }) {
+  const childArray = Children.toArray(children);
+  
+  const withDividers = childArray.reduce((acc, child, index) => {
+    acc.push(child);
+    if (index < childArray.length - 1) {
+      acc.push(<hr key={`divider-${index}`} />);
+    }
+    return acc;
+  }, []);
+  
+  return <div>{withDividers}</div>;
+}
+```
+
+**Accessing specific children:**
+
+```javascript
+function FirstAndLast({ children }) {
+  const childArray = Children.toArray(children);
+  
+  if (childArray.length === 0) return null;
+  
+  const first = childArray[0];
+  const last = childArray[childArray.length - 1];
+  
+  return (
+    <div>
+      <div className="first">{first}</div>
+      <div className="last">{last}</div>
+    </div>
+  );
+}
+```
+
+### Key Assignment
+
+`Children.toArray()` automatically assigns keys to elements that don't have them:
+
+```javascript
+const children = [
+  <div>No key</div>,
+  <span key="custom">Custom key</span>,
+  <p>Another no key</p>
+];
+
+const array = Children.toArray(children);
+// Keys are now: '.0', 'custom', '.2'
+```
+
+## Children.only()
+
+Assert that children contains exactly one child and return it.
+
+```typescript
+function only<T>(children: T): T
+```
+
+<ParamField path="children" type="ReactNode" required>
+  The children value to validate.
+</ParamField>
+
+**Returns:** The single child element.
+
+**Throws:** `Error` if children is not a single React element.
+
+### Usage
+
+```javascript
+import { Children } from 'react';
+
+function SingleChildWrapper({ children }) {
+  // Throws if children is not exactly one element
+  const child = Children.only(children);
+  
+  return <div className="wrapper">{child}</div>;
+}
+
+// ✅ Valid:
+<SingleChildWrapper>
+  <div>Only child</div>
+</SingleChildWrapper>
+
+// ❌ Throws error:
+<SingleChildWrapper>
+  <div>First</div>
+  <div>Second</div>
+</SingleChildWrapper>
+
+// ❌ Throws error:
+<SingleChildWrapper>
+  Just text
+</SingleChildWrapper>
+
+// ❌ Throws error:
+<SingleChildWrapper />
+```
+
+**Enforcing single child constraint:**
+
+```javascript
+function Dialog({ children }) {
+  // Ensure only one child is passed
+  const content = Children.only(children);
+  
+  return (
+    <div className="dialog">
+      <div className="dialog-content">
+        {content}
+      </div>
+    </div>
+  );
+}
+```
+
+**With cloneElement:**
+
+```javascript
+function AddPropsToSingleChild({ children, extraProp }) {
+  const child = Children.only(children);
+  
+  return React.cloneElement(child, { extraProp });
+}
+
+// Usage:
+<AddPropsToSingleChild extraProp="value">
+  <CustomComponent />
+</AddPropsToSingleChild>
+```
+
+**Type-safe wrapper:**
+
+```javascript
+function StrictWrapper({ children }) {
+  // This ensures children is a single React element
+  const child = Children.only(children);
+  
+  if (!React.isValidElement(child)) {
+    throw new Error('Child must be a valid React element');
+  }
+  
+  return (
+    <div className="strict-wrapper">
+      {child}
+    </div>
+  );
+}
+```
+
+### When to Use Children.only()
+
+**Use when:**
+
+- Your component can only work with a single child element
+- You need to call `cloneElement` on the child
+- You want to enforce API constraints at runtime
+
+**Don't use when:**
+
+- Your component can handle multiple children
+- You just want the first child (use `Children.toArray(children)[0]` instead)
+- You want to allow text or other non-element children
+
+## Common Patterns
+
+### Wrapping Each Child
+
+```javascript
+function WrapChildren({ wrapper: Wrapper, children }) {
+  return Children.map(children, child => (
+    <Wrapper>{child}</Wrapper>
+  ));
+}
+
+// Usage:
+<WrapChildren wrapper={({ children }) => <li>{children}</li>}>
+  <span>Item 1</span>
+  <span>Item 2</span>
+</WrapChildren>
+```
+
+### Conditional Rendering Based on Children
+
+```javascript
+function ConditionalContainer({ children, showIfEmpty = false }) {
+  const count = Children.count(children);
+  
+  if (count === 0 && !showIfEmpty) {
+    return null;
+  }
+  
+  return (
+    <div className="container">
+      {count === 0 ? 'No items' : children}
+    </div>
+  );
+}
+```
+
+### Grouping Children
+
+```javascript
+function GroupChildren({ children, groupSize = 2 }) {
+  const childArray = Children.toArray(children);
+  const groups = [];
+  
+  for (let i = 0; i < childArray.length; i += groupSize) {
+    groups.push(
+      <div key={i} className="group">
+        {childArray.slice(i, i + groupSize)}
+      </div>
+    );
+  }
+  
+  return <div>{groups}</div>;
+}
+```
+
+<Warning>
+**Caution with Promises and Thenables:**
+
+The `Children` utilities can work with React 19's use() hook, but they handle promises specially. If a child is a promise, it will be resolved automatically, which may cause unexpected behavior.
+</Warning>
+
+<Note>
+**Performance Consideration:**
+
+While `Children` utilities are convenient, they do add some overhead. For performance-critical code with large numbers of children, consider alternative patterns like render props or passing arrays directly as props instead of using `props.children`.
+</Note>

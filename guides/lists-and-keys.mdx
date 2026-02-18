@@ -1,0 +1,512 @@
+---
+title: Lists and Keys
+description: Learn how to render lists of data in React and why keys are essential for performance and correctness
+---
+
+# Lists and Keys
+
+You'll often need to display multiple similar components from a collection of data. In React, you can use JavaScript array methods to render lists of components.
+
+## Rendering Arrays with map()
+
+Use the `map()` method to transform an array of data into an array of JSX elements:
+
+```jsx
+function FruitList() {
+  const fruits = ['Apple', 'Banana', 'Orange', 'Mango'];
+
+  return (
+    <ul>
+      {fruits.map(fruit => (
+        <li key={fruit}>{fruit}</li>
+      ))}
+    </ul>
+  );
+}
+```
+
+### Rendering Array of Objects
+
+Most commonly, you'll map over an array of objects:
+
+```jsx
+function UserList() {
+  const users = [
+    { id: 1, name: 'Alice', email: 'alice@example.com' },
+    { id: 2, name: 'Bob', email: 'bob@example.com' },
+    { id: 3, name: 'Charlie', email: 'charlie@example.com' }
+  ];
+
+  return (
+    <ul>
+      {users.map(user => (
+        <li key={user.id}>
+          <strong>{user.name}</strong> - {user.email}
+        </li>
+      ))}
+    </ul>
+  );
+}
+```
+
+## The Key Prop
+
+Every item in a list needs a `key` prop - a unique string or number that identifies it among siblings:
+
+```jsx
+function TodoList({ todos }) {
+  return (
+    <ul>
+      {todos.map(todo => (
+        <li key={todo.id}>
+          {todo.text}
+        </li>
+      ))}
+    </ul>
+  );
+}
+```
+
+<Note>
+**Why keys matter:** Keys help React identify which items have changed, been added, or been removed. Without proper keys, React may re-render items incorrectly or lose component state.
+</Note>
+
+### What Happens Without Keys
+
+```jsx
+// ❌ Bad - missing keys causes warning and potential bugs
+function BadList({ items }) {
+  return (
+    <ul>
+      {items.map(item => <li>{item}</li>)}
+    </ul>
+  );
+}
+
+// ⚠️ Bad - using index as key is problematic
+function AlsoBad({ items }) {
+  return (
+    <ul>
+      {items.map((item, index) => (
+        <li key={index}>{item}</li>
+      ))}
+    </ul>
+  );
+}
+
+// ✅ Good - using unique stable identifier
+function GoodList({ items }) {
+  return (
+    <ul>
+      {items.map(item => (
+        <li key={item.id}>{item.name}</li>
+      ))}
+    </ul>
+  );
+}
+```
+
+## Where to Get Keys
+
+<Steps>
+
+### Data from a database
+
+Use database IDs - they're unique and stable:
+
+```jsx
+function ProductList({ products }) {
+  return (
+    <div>
+      {products.map(product => (
+        <ProductCard key={product.id} product={product} />
+      ))}
+    </div>
+  );
+}
+```
+
+### Locally generated data
+
+Use libraries like `crypto.randomUUID()` or `uuid`:
+
+```jsx
+import { useState } from 'react';
+
+function TodoApp() {
+  const [todos, setTodos] = useState([]);
+
+  const addTodo = (text) => {
+    const newTodo = {
+      id: crypto.randomUUID(), // Generate unique ID
+      text,
+      completed: false
+    };
+    setTodos([...todos, newTodo]);
+  };
+
+  return (
+    <ul>
+      {todos.map(todo => (
+        <li key={todo.id}>{todo.text}</li>
+      ))}
+    </ul>
+  );
+}
+```
+
+### Static content that never changes
+
+For truly static lists that never reorder, you can use index:
+
+```jsx
+function Navigation() {
+  const navItems = ['Home', 'About', 'Contact']; // Never changes
+
+  return (
+    <nav>
+      {navItems.map((item, index) => (
+        <a key={index} href={`/${item.toLowerCase()}`}>
+          {item}
+        </a>
+      ))}
+    </nav>
+  );
+}
+```
+
+</Steps>
+
+<Note>
+**When NOT to use index as key:**
+- Items can be reordered (sorting, filtering)
+- Items can be added or removed
+- The list can be paginated or filtered
+- Items have state (like input fields)
+</Note>
+
+## Rules for Keys
+
+### Keys Must Be Unique Among Siblings
+
+```jsx
+// ✅ Correct - keys are unique within the list
+function MessageList({ messages }) {
+  return (
+    <div>
+      {messages.map(msg => (
+        <div key={msg.id}>{msg.text}</div>
+      ))}
+    </div>
+  );
+}
+
+// ✅ Also correct - same keys in different lists are fine
+function TwoLists({ users, posts }) {
+  return (
+    <>
+      <ul>
+        {users.map(user => (
+          <li key={user.id}>{user.name}</li>
+        ))}
+      </ul>
+      <ul>
+        {posts.map(post => (
+          <li key={post.id}>{post.title}</li> // Same ID space OK
+        ))}
+      </ul>
+    </>
+  );
+}
+```
+
+### Keys Must Not Change
+
+```jsx
+// ❌ Wrong - generates new key on every render
+function BadList({ items }) {
+  return (
+    <ul>
+      {items.map(item => (
+        <li key={Math.random()}>{item}</li>
+      ))}
+    </ul>
+  );
+}
+
+// ✅ Correct - stable keys
+function GoodList({ items }) {
+  return (
+    <ul>
+      {items.map(item => (
+        <li key={item.id}>{item.text}</li>
+      ))}
+    </ul>
+  );
+}
+```
+
+### Keys Are Not Passed to Components
+
+```jsx
+function Item({ id, name }) {
+  // ❌ `key` is not available as a prop
+  console.log(id); // undefined if you passed key={id}
+  return <div>{name}</div>;
+}
+
+function List({ items }) {
+  return (
+    <div>
+      {items.map(item => (
+        // ✅ Pass id separately if the component needs it
+        <Item key={item.id} id={item.id} name={item.name} />
+      ))}
+    </div>
+  );
+}
+```
+
+## Filtering Lists
+
+Filter arrays before mapping:
+
+```jsx
+function TodoList({ todos, filter }) {
+  const filteredTodos = todos.filter(todo => {
+    if (filter === 'active') return !todo.completed;
+    if (filter === 'completed') return todo.completed;
+    return true; // 'all'
+  });
+
+  return (
+    <ul>
+      {filteredTodos.map(todo => (
+        <li key={todo.id}>
+          <input 
+            type="checkbox" 
+            checked={todo.completed}
+          />
+          {todo.text}
+        </li>
+      ))}
+    </ul>
+  );
+}
+```
+
+## Sorting Lists
+
+Sort arrays before mapping (don't mutate original):
+
+```jsx
+function UserList({ users, sortBy }) {
+  const sortedUsers = [...users].sort((a, b) => {
+    if (sortBy === 'name') {
+      return a.name.localeCompare(b.name);
+    }
+    if (sortBy === 'age') {
+      return a.age - b.age;
+    }
+    return 0;
+  });
+
+  return (
+    <ul>
+      {sortedUsers.map(user => (
+        <li key={user.id}>
+          {user.name} ({user.age})
+        </li>
+      ))}
+    </ul>
+  );
+}
+```
+
+## Nested Lists
+
+Each level of nesting needs its own keys:
+
+```jsx
+function NestedList({ categories }) {
+  return (
+    <div>
+      {categories.map(category => (
+        <div key={category.id}>
+          <h2>{category.name}</h2>
+          <ul>
+            {category.items.map(item => (
+              <li key={item.id}>{item.name}</li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </div>
+  );
+}
+```
+
+## Extracting Components from Lists
+
+Extract list items into separate components for better organization:
+
+```jsx
+function TodoItem({ todo, onToggle, onDelete }) {
+  return (
+    <li className={todo.completed ? 'completed' : ''}>
+      <input
+        type="checkbox"
+        checked={todo.completed}
+        onChange={() => onToggle(todo.id)}
+      />
+      <span>{todo.text}</span>
+      <button onClick={() => onDelete(todo.id)}>Delete</button>
+    </li>
+  );
+}
+
+function TodoList({ todos, onToggle, onDelete }) {
+  return (
+    <ul>
+      {todos.map(todo => (
+        <TodoItem
+          key={todo.id}
+          todo={todo}
+          onToggle={onToggle}
+          onDelete={onDelete}
+        />
+      ))}
+    </ul>
+  );
+}
+```
+
+## Complete Shopping List Example
+
+```jsx
+import { useState } from 'react';
+
+function ShoppingList() {
+  const [items, setItems] = useState([
+    { id: 1, name: 'Apples', quantity: 3, purchased: false },
+    { id: 2, name: 'Bread', quantity: 1, purchased: true },
+    { id: 3, name: 'Milk', quantity: 2, purchased: false }
+  ]);
+  const [filter, setFilter] = useState('all'); // 'all', 'pending', 'purchased'
+
+  const addItem = (name, quantity) => {
+    setItems([
+      ...items,
+      {
+        id: Date.now(),
+        name,
+        quantity: parseInt(quantity),
+        purchased: false
+      }
+    ]);
+  };
+
+  const togglePurchased = (id) => {
+    setItems(items.map(item =>
+      item.id === id
+        ? { ...item, purchased: !item.purchased }
+        : item
+    ));
+  };
+
+  const deleteItem = (id) => {
+    setItems(items.filter(item => item.id !== id));
+  };
+
+  const filteredItems = items.filter(item => {
+    if (filter === 'pending') return !item.purchased;
+    if (filter === 'purchased') return item.purchased;
+    return true;
+  });
+
+  return (
+    <div>
+      <h1>Shopping List</h1>
+      
+      <div className="filters">
+        <button onClick={() => setFilter('all')}>All</button>
+        <button onClick={() => setFilter('pending')}>Pending</button>
+        <button onClick={() => setFilter('purchased')}>Purchased</button>
+      </div>
+
+      {filteredItems.length === 0 ? (
+        <p>No items to display</p>
+      ) : (
+        <ul>
+          {filteredItems.map(item => (
+            <li key={item.id} className={item.purchased ? 'purchased' : ''}>
+              <input
+                type="checkbox"
+                checked={item.purchased}
+                onChange={() => togglePurchased(item.id)}
+              />
+              <span>
+                {item.name} (x{item.quantity})
+              </span>
+              <button onClick={() => deleteItem(item.id)}>Delete</button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <p>Total items: {items.length}</p>
+      <p>Purchased: {items.filter(i => i.purchased).length}</p>
+    </div>
+  );
+}
+```
+
+## Performance Considerations
+
+For large lists, consider these optimizations:
+
+```jsx
+import { useMemo } from 'react';
+
+function LargeList({ items, searchTerm }) {
+  // Memoize filtered results to avoid recalculating on every render
+  const filteredItems = useMemo(() => {
+    return items.filter(item =>
+      item.name.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [items, searchTerm]);
+
+  return (
+    <ul>
+      {filteredItems.map(item => (
+        <li key={item.id}>{item.name}</li>
+      ))}
+    </ul>
+  );
+}
+```
+
+<Note>
+**For very large lists (1000+ items):**
+- Consider virtualization libraries (react-window, react-virtualized)
+- Implement pagination or infinite scroll
+- Use `useMemo` for expensive filtering/sorting
+- Lazy load data as needed
+</Note>
+
+## Best Practices
+
+<Note>
+**Key principles for lists:**
+- Always provide a `key` prop when rendering lists
+- Use unique, stable identifiers (database IDs are ideal)
+- Avoid using array index as key unless the list is truly static
+- Extract list items into separate components
+- Filter and sort data before mapping
+- Keep keys unique among siblings
+- Don't generate random keys on each render
+</Note>
+
+## Next Steps
+
+Now that you can render lists, learn how to handle user input with [forms and controlled components](/guides/forms).

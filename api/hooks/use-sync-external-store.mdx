@@ -1,0 +1,588 @@
+---
+title: useSyncExternalStore
+description: Subscribe to an external store
+---
+
+`useSyncExternalStore` is a React Hook that lets you subscribe to an external store.
+
+```typescript
+function useSyncExternalStore<T>(
+  subscribe: (() => void) => () => void,
+  getSnapshot: () => T,
+  getServerSnapshot?: () => T
+): T
+```
+
+## Parameters
+
+<ParamField path="subscribe" type="(callback: () => void) => () => void" required>
+  A function that takes a single `callback` argument and subscribes it to the store. When the store changes, it should call the provided `callback`. This will cause the component to re-render. The `subscribe` function should return a cleanup function that unsubscribes.
+</ParamField>
+
+<ParamField path="getSnapshot" type="() => T" required>
+  A function that returns a snapshot of the data in the store that's needed by the component. While the store has not changed, repeated calls to `getSnapshot` must return the same value. If the store changes and the returned value is different (compared with `Object.is`), React will re-render the component.
+</ParamField>
+
+<ParamField path="getServerSnapshot" type="() => T">
+  A function that returns the initial snapshot of the data in the store. It will be used only during server rendering and during hydration of server-rendered content on the client. The server snapshot must be the same between the client and the server, and is usually serialized and passed from the server to the client.
+  
+  If omitted, rendering the component on the server will throw an error.
+</ParamField>
+
+## Returns
+
+The current snapshot of the store which you can use in your rendering logic.
+
+## Usage
+
+### Subscribing to an external store
+
+Most React components will only read data from their props, state, and context. However, sometimes a component needs to read data from some store outside of React that changes over time:
+
+- Third-party state management libraries that hold state outside of React
+- Browser APIs that expose a mutable value and events to subscribe to its changes
+
+```javascript
+import { useSyncExternalStore } from 'react';
+import { todosStore } from './todoStore.js';
+
+function TodosApp() {
+  const todos = useSyncExternalStore(
+    todosStore.subscribe,
+    todosStore.getSnapshot
+  );
+  
+  return (
+    <ul>
+      {todos.map(todo => (
+        <li key={todo.id}>{todo.text}</li>
+      ))}
+    </ul>
+  );
+}
+```
+
+### Subscribing to a browser API
+
+Another reason to use `useSyncExternalStore` is when you want to subscribe to a browser API:
+
+```javascript
+import { useSyncExternalStore } from 'react';
+
+function useOnlineStatus() {
+  const isOnline = useSyncExternalStore(
+    subscribe,
+    getSnapshot
+  );
+  return isOnline;
+}
+
+function subscribe(callback) {
+  window.addEventListener('online', callback);
+  window.addEventListener('offline', callback);
+  return () => {
+    window.removeEventListener('online', callback);
+    window.removeEventListener('offline', callback);
+  };
+}
+
+function getSnapshot() {
+  return navigator.onLine;
+}
+
+// Usage
+function StatusBar() {
+  const isOnline = useOnlineStatus();
+  return <h1>{isOnline ? '✅ Online' : '❌ Disconnected'}</h1>;
+}
+```
+
+### Extracting the logic to a custom Hook
+
+Typically you won't call `useSyncExternalStore` directly. Instead, you'll call it from your own custom Hook:
+
+```javascript
+import { useSyncExternalStore } from 'react';
+
+export function useOnlineStatus() {
+  const isOnline = useSyncExternalStore(
+    subscribe,
+    getSnapshot,
+    getServerSnapshot
+  );
+  return isOnline;
+}
+
+function subscribe(callback) {
+  window.addEventListener('online', callback);
+  window.addEventListener('offline', callback);
+  return () => {
+    window.removeEventListener('online', callback);
+    window.removeEventListener('offline', callback);
+  };
+}
+
+function getSnapshot() {
+  return navigator.onLine;
+}
+
+function getServerSnapshot() {
+  return true; // Always show "Online" for server-generated HTML
+}
+
+// Now any component can use it
+function App() {
+  const isOnline = useOnlineStatus();
+  return <div>Status: {isOnline ? 'Online' : 'Offline'}</div>;
+}
+```
+
+### Adding support for server rendering
+
+If your React app uses server rendering, your components will also run outside the browser environment to generate the initial HTML. This creates some challenges:
+
+- If you're subscribing to a browser-only API, it won't work because it doesn't exist on the server
+- If you're subscribing to a third-party data store, you'll need its data to match between the server and client
+
+Provide a `getServerSnapshot` function:
+
+```javascript
+import { useSyncExternalStore } from 'react';
+
+export function useWindowWidth() {
+  const width = useSyncExternalStore(
+    subscribe,
+    getSnapshot,
+    getServerSnapshot
+  );
+  return width;
+}
+
+function subscribe(callback) {
+  window.addEventListener('resize', callback);
+  return () => window.removeEventListener('resize', callback);
+}
+
+function getSnapshot() {
+  return window.innerWidth;
+}
+
+function getServerSnapshot() {
+  return 0; // Or a sensible default
+}
+```
+
+## Common Use Cases
+
+### Window dimensions
+
+```javascript
+function useWindowDimensions() {
+  const dimensions = useSyncExternalStore(
+    subscribe,
+    getSnapshot,
+    getServerSnapshot
+  );
+  return dimensions;
+}
+
+function subscribe(callback) {
+  window.addEventListener('resize', callback);
+  return () => window.removeEventListener('resize', callback);
+}
+
+function getSnapshot() {
+  return {
+    width: window.innerWidth,
+    height: window.innerHeight
+  };
+}
+
+function getServerSnapshot() {
+  return { width: 0, height: 0 };
+}
+
+// Usage
+function Component() {
+  const { width, height } = useWindowDimensions();
+  return <div>Window: {width}x{height}</div>;
+}
+```
+
+### Media queries
+
+```javascript
+function useMediaQuery(query) {
+  const matches = useSyncExternalStore(
+    callback => subscribe(query, callback),
+    () => getSnapshot(query),
+    () => getServerSnapshot(query)
+  );
+  return matches;
+}
+
+function subscribe(query, callback) {
+  const mediaQuery = window.matchMedia(query);
+  mediaQuery.addEventListener('change', callback);
+  return () => mediaQuery.removeEventListener('change', callback);
+}
+
+function getSnapshot(query) {
+  return window.matchMedia(query).matches;
+}
+
+function getServerSnapshot(query) {
+  // Can't know on server, return false or parse user-agent
+  return false;
+}
+
+// Usage
+function Component() {
+  const isMobile = useMediaQuery('(max-width: 768px)');
+  return <div>{isMobile ? 'Mobile' : 'Desktop'}</div>;
+}
+```
+
+### Local storage
+
+```javascript
+function useLocalStorage(key, initialValue) {
+  const subscribe = useCallback((callback) => {
+    const handler = (e) => {
+      if (e.key === key) {
+        callback();
+      }
+    };
+    window.addEventListener('storage', handler);
+    return () => window.removeEventListener('storage', handler);
+  }, [key]);
+  
+  const getSnapshot = useCallback(() => {
+    const item = localStorage.getItem(key);
+    return item ? JSON.parse(item) : initialValue;
+  }, [key, initialValue]);
+  
+  const getServerSnapshot = useCallback(() => {
+    return initialValue;
+  }, [initialValue]);
+  
+  return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+}
+
+// Usage
+function Component() {
+  const theme = useLocalStorage('theme', 'light');
+  return <div className={theme}>Content</div>;
+}
+```
+
+### Third-party store
+
+```javascript
+// Store implementation
+class Store {
+  constructor(initialState) {
+    this.state = initialState;
+    this.listeners = new Set();
+  }
+  
+  getState() {
+    return this.state;
+  }
+  
+  setState(newState) {
+    this.state = newState;
+    this.listeners.forEach(listener => listener());
+  }
+  
+  subscribe(listener) {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+}
+
+const store = new Store({ count: 0 });
+
+// React Hook
+function useStore() {
+  return useSyncExternalStore(
+    store.subscribe.bind(store),
+    store.getState.bind(store)
+  );
+}
+
+// Usage
+function Counter() {
+  const state = useStore();
+  
+  return (
+    <div>
+      <p>Count: {state.count}</p>
+      <button onClick={() => store.setState({ count: state.count + 1 })}>
+        Increment
+      </button>
+    </div>
+  );
+}
+```
+
+### Network status
+
+```javascript
+function useNetworkStatus() {
+  const status = useSyncExternalStore(
+    subscribe,
+    getSnapshot,
+    getServerSnapshot
+  );
+  return status;
+}
+
+function subscribe(callback) {
+  const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+  
+  if (connection) {
+    connection.addEventListener('change', callback);
+    return () => connection.removeEventListener('change', callback);
+  }
+  
+  return () => {};
+}
+
+function getSnapshot() {
+  const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+  
+  if (!connection) {
+    return { effectiveType: 'unknown', downlink: 0 };
+  }
+  
+  return {
+    effectiveType: connection.effectiveType,
+    downlink: connection.downlink
+  };
+}
+
+function getServerSnapshot() {
+  return { effectiveType: 'unknown', downlink: 0 };
+}
+```
+
+## TypeScript
+
+```typescript
+import { useSyncExternalStore } from 'react';
+
+interface Dimensions {
+  width: number;
+  height: number;
+}
+
+function useWindowSize(): Dimensions {
+  const size = useSyncExternalStore<Dimensions>(
+    subscribe,
+    getSnapshot,
+    getServerSnapshot
+  );
+  return size;
+}
+
+function subscribe(callback: () => void): () => void {
+  window.addEventListener('resize', callback);
+  return () => window.removeEventListener('resize', callback);
+}
+
+function getSnapshot(): Dimensions {
+  return {
+    width: window.innerWidth,
+    height: window.innerHeight
+  };
+}
+
+function getServerSnapshot(): Dimensions {
+  return { width: 0, height: 0 };
+}
+```
+
+### Generic store hook
+
+```typescript
+function useStore<T>(store: {
+  subscribe: (callback: () => void) => () => void;
+  getSnapshot: () => T;
+  getServerSnapshot?: () => T;
+}): T {
+  return useSyncExternalStore(
+    store.subscribe,
+    store.getSnapshot,
+    store.getServerSnapshot || store.getSnapshot
+  );
+}
+```
+
+## Troubleshooting
+
+### I'm getting an error: "The result of getSnapshot should be cached"
+
+This error means that your `getSnapshot` function returns a new object on every call:
+
+```javascript
+// ❌ Returns new object every time
+function getSnapshot() {
+  return { value: store.value };
+}
+
+// ✅ Returns same object if value hasn't changed
+let cachedSnapshot = { value: store.value };
+function getSnapshot() {
+  const value = store.value;
+  if (cachedSnapshot.value !== value) {
+    cachedSnapshot = { value };
+  }
+  return cachedSnapshot;
+}
+```
+
+Alternatively, return a primitive value that can be safely compared:
+
+```javascript
+// ✅ Returns primitive value
+function getSnapshot() {
+  return store.value; // Just the value, not an object
+}
+```
+
+### My subscribe function is called on every render
+
+Make sure your `subscribe` function is defined outside the component or wrapped in `useCallback`:
+
+```javascript
+// ❌ New function every render
+function Component() {
+  const value = useSyncExternalStore(
+    (callback) => { // New function every time!
+      store.subscribe(callback);
+      return () => store.unsubscribe(callback);
+    },
+    () => store.value
+  );
+}
+
+// ✅ Stable function
+function subscribe(callback) {
+  store.subscribe(callback);
+  return () => store.unsubscribe(callback);
+}
+
+function Component() {
+  const value = useSyncExternalStore(
+    subscribe,
+    () => store.value
+  );
+}
+```
+
+### Hydration mismatch on server rendering
+
+If you get a hydration mismatch error, make sure you provided `getServerSnapshot`:
+
+```javascript
+// ❌ Missing getServerSnapshot
+const value = useSyncExternalStore(
+  subscribe,
+  getSnapshot
+  // Missing third argument!
+);
+
+// ✅ With getServerSnapshot
+const value = useSyncExternalStore(
+  subscribe,
+  getSnapshot,
+  getServerSnapshot
+);
+```
+
+## Best Practices
+
+### Keep getSnapshot pure and fast
+
+```javascript
+// ✅ Good: Simple, pure function
+function getSnapshot() {
+  return store.value;
+}
+
+// ❌ Bad: Expensive computation
+function getSnapshot() {
+  return store.items.map(item => {
+    // Expensive transformation
+  });
+}
+```
+
+### Memoize expensive snapshots
+
+```javascript
+let lastSnapshot = null;
+let lastItems = null;
+
+function getSnapshot() {
+  const items = store.items;
+  
+  if (items === lastItems) {
+    return lastSnapshot;
+  }
+  
+  lastItems = items;
+  lastSnapshot = items.map(item => transform(item));
+  return lastSnapshot;
+}
+```
+
+### Extract to custom hooks
+
+```javascript
+// ✅ Create reusable custom hooks
+export function useOnlineStatus() {
+  return useSyncExternalStore(
+    subscribe,
+    getSnapshot,
+    getServerSnapshot
+  );
+}
+
+// ❌ Don't call useSyncExternalStore directly in components
+function Component() {
+  const value = useSyncExternalStore(...);
+}
+```
+
+### Handle server rendering properly
+
+```javascript
+function getServerSnapshot() {
+  // Return a sensible default for server
+  return defaultValue;
+}
+
+function getSnapshot() {
+  // Check if window exists (client-side)
+  if (typeof window === 'undefined') {
+    return defaultValue;
+  }
+  return window.someAPI;
+}
+```
+
+## When to use useSyncExternalStore
+
+Use `useSyncExternalStore` when:
+- ✅ You're subscribing to a third-party store
+- ✅ You're subscribing to browser APIs
+- ✅ You're building a state management library
+- ✅ You need to integrate with external mutable state
+
+Don't use it for:
+- ❌ React state (`useState`, `useReducer`)
+- ❌ React context (`useContext`)
+- ❌ Props passed from parent
+- ❌ Local component state

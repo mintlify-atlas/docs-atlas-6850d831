@@ -1,0 +1,372 @@
+---
+title: 'Performance Optimization'
+description: 'Strategies and techniques for optimizing React application performance'
+---
+
+# Performance Optimization
+
+React is fast by default, but as your application grows, you may encounter performance bottlenecks. This guide covers strategies for identifying and resolving common performance issues.
+
+## Production Builds
+
+Always use production builds for deployed applications. Development builds include helpful warnings and debugging tools but are significantly slower.
+
+```bash
+# Create React App
+npm run build
+
+# Vite
+npm run build
+
+# Next.js
+npm run build
+```
+
+<Tip>
+Production builds enable optimizations like code minification, dead code elimination, and removal of development-only warnings. React's production build is typically 2-3x faster than development mode.
+</Tip>
+
+## Avoiding Unnecessary Renders
+
+One of the most common performance issues is components re-rendering when their output hasn't changed.
+
+### Before: Unnecessary Re-renders
+
+```jsx
+function ParentComponent() {
+  const [count, setCount] = useState(0);
+  
+  return (
+    <div>
+      <button onClick={() => setCount(count + 1)}>
+        Count: {count}
+      </button>
+      <ExpensiveChild data="static" />
+    </div>
+  );
+}
+
+function ExpensiveChild({ data }) {
+  // This re-renders every time ParentComponent updates,
+  // even though 'data' never changes
+  const result = performExpensiveCalculation(data);
+  return <div>{result}</div>;
+}
+```
+
+### After: Optimized with React.memo
+
+```jsx
+function ParentComponent() {
+  const [count, setCount] = useState(0);
+  
+  return (
+    <div>
+      <button onClick={() => setCount(count + 1)}>
+        Count: {count}
+      </button>
+      <ExpensiveChild data="static" />
+    </div>
+  );
+}
+
+// ExpensiveChild now only re-renders when props actually change
+const ExpensiveChild = React.memo(function ExpensiveChild({ data }) {
+  const result = performExpensiveCalculation(data);
+  return <div>{result}</div>;
+});
+```
+
+<Tip>
+Use React DevTools Profiler to identify components that re-render frequently. Focus optimization efforts on components that render slowly or render very often.
+</Tip>
+
+## React DevTools Profiler
+
+The React DevTools Profiler helps you visualize component render performance.
+
+### Using the Profiler
+
+1. Install [React DevTools](https://react.dev/learn/react-developer-tools)
+2. Open the Profiler tab
+3. Click the record button
+4. Interact with your app
+5. Stop recording to analyze results
+
+### What to Look For
+
+- **Flame graphs**: Visualize which components took the longest to render
+- **Ranked charts**: See components sorted by render time
+- **Component charts**: Track individual component render counts
+- **Yellow/orange bars**: Indicate slower renders that may need optimization
+
+```jsx
+import { Profiler } from 'react';
+
+function onRenderCallback(
+  id,                 // "profile-name"
+  phase,              // "mount" or "update"
+  actualDuration,     // Time spent rendering
+  baseDuration,       // Estimated time without memoization
+  startTime,          // When React began rendering
+  commitTime          // When React committed the update
+) {
+  console.log(`${id} (${phase}) took ${actualDuration}ms`);
+}
+
+function App() {
+  return (
+    <Profiler id="app" onRender={onRenderCallback}>
+      <YourComponents />
+    </Profiler>
+  );
+}
+```
+
+See the [Profiler documentation](/performance/profiler) for more details.
+
+## Common Performance Issues
+
+### 1. Creating New Objects/Functions in Render
+
+**Problem**: Creating new object references on every render prevents memoization.
+
+```jsx
+// ❌ Bad: New object created on every render
+function UserProfile({ userId }) {
+  return (
+    <UserCard 
+      user={{ id: userId, preferences: { theme: 'dark' } }}
+      onUpdate={() => console.log('updated')}
+    />
+  );
+}
+```
+
+**Solution**: Use `useMemo` and `useCallback` to maintain stable references.
+
+```jsx
+// ✅ Good: Stable references
+function UserProfile({ userId }) {
+  const user = useMemo(
+    () => ({ id: userId, preferences: { theme: 'dark' } }),
+    [userId]
+  );
+  
+  const handleUpdate = useCallback(
+    () => console.log('updated'),
+    []
+  );
+  
+  return <UserCard user={user} onUpdate={handleUpdate} />;
+}
+```
+
+See the [Memoization documentation](/performance/memoization) for more details.
+
+### 2. Large Lists Without Keys
+
+**Problem**: React can't efficiently update lists without stable keys.
+
+```jsx
+// ❌ Bad: Using index as key
+{items.map((item, index) => (
+  <ListItem key={index} data={item} />
+))}
+```
+
+**Solution**: Use unique, stable identifiers.
+
+```jsx
+// ✅ Good: Using stable ID
+{items.map(item => (
+  <ListItem key={item.id} data={item} />
+))}
+```
+
+### 3. Expensive Calculations in Render
+
+**Problem**: Heavy computations run on every render.
+
+```jsx
+// ❌ Bad: Calculation runs every render
+function DataTable({ data }) {
+  const sortedData = data.sort().filter(item => item.active);
+  return <Table data={sortedData} />;
+}
+```
+
+**Solution**: Memoize expensive calculations.
+
+```jsx
+// ✅ Good: Calculation only runs when data changes
+function DataTable({ data }) {
+  const sortedData = useMemo(
+    () => data.sort().filter(item => item.active),
+    [data]
+  );
+  return <Table data={sortedData} />;
+}
+```
+
+### 4. Context Updates Causing Wide Re-renders
+
+**Problem**: Context updates cause all consumers to re-render.
+
+```jsx
+// ❌ Bad: Single context with multiple values
+const AppContext = createContext();
+
+function Provider({ children }) {
+  const [user, setUser] = useState(null);
+  const [theme, setTheme] = useState('light');
+  
+  return (
+    <AppContext.Provider value={{ user, setUser, theme, setTheme }}>
+      {children}
+    </AppContext.Provider>
+  );
+}
+```
+
+**Solution**: Split contexts by update frequency.
+
+```jsx
+// ✅ Good: Separate contexts for different concerns
+const UserContext = createContext();
+const ThemeContext = createContext();
+
+function Provider({ children }) {
+  const [user, setUser] = useState(null);
+  const [theme, setTheme] = useState('light');
+  
+  return (
+    <UserContext.Provider value={{ user, setUser }}>
+      <ThemeContext.Provider value={{ theme, setTheme }}>
+        {children}
+      </ThemeContext.Provider>
+    </UserContext.Provider>
+  );
+}
+```
+
+## PureComponent for Class Components
+
+For class components, extend `PureComponent` instead of `Component` for automatic shallow prop comparison (see `ReactBaseClasses.js:132`).
+
+```jsx
+import { PureComponent } from 'react';
+
+// Automatically skips re-render if props haven't changed (shallow comparison)
+class UserCard extends PureComponent {
+  render() {
+    return <div>{this.props.name}</div>;
+  }
+}
+```
+
+<Warning>
+`PureComponent` uses shallow comparison. If you pass objects or arrays as props, ensure they have stable references or the comparison will fail and cause unnecessary re-renders.
+</Warning>
+
+## Code Splitting
+
+Split large bundles using `React.lazy()` and dynamic imports.
+
+```jsx
+import { lazy, Suspense } from 'react';
+
+// Component is only loaded when rendered
+const HeavyComponent = lazy(() => import('./HeavyComponent'));
+
+function App() {
+  return (
+    <Suspense fallback={<Loading />}>
+      <HeavyComponent />
+    </Suspense>
+  );
+}
+```
+
+## Virtualization for Long Lists
+
+For lists with hundreds or thousands of items, render only visible items.
+
+```jsx
+import { FixedSizeList } from 'react-window';
+
+function LargeList({ items }) {
+  return (
+    <FixedSizeList
+      height={600}
+      itemCount={items.length}
+      itemSize={35}
+      width="100%"
+    >
+      {({ index, style }) => (
+        <div style={style}>{items[index].name}</div>
+      )}
+    </FixedSizeList>
+  );
+}
+```
+
+<Tip>
+Use libraries like `react-window` or `react-virtualized` for efficient list rendering. These libraries only render items in the viewport, dramatically improving performance for large datasets.
+</Tip>
+
+## Measuring Performance
+
+### Browser DevTools
+
+Use the Performance tab in Chrome DevTools:
+
+1. Open DevTools (F12)
+2. Go to Performance tab
+3. Click Record
+4. Interact with your app
+5. Stop recording and analyze the flame chart
+
+### User Timing API
+
+```jsx
+function ProfiledComponent() {
+  useEffect(() => {
+    performance.mark('component-start');
+    
+    return () => {
+      performance.mark('component-end');
+      performance.measure(
+        'component-duration',
+        'component-start',
+        'component-end'
+      );
+    };
+  }, []);
+  
+  return <div>Content</div>;
+}
+```
+
+## Optimization Checklist
+
+<Warning>
+**Don't optimize prematurely!** Always measure first. Premature optimization can make code harder to maintain without meaningful performance gains. Focus on optimizing slow components identified through profiling.
+</Warning>
+
+- [ ] Use production builds for deployed apps
+- [ ] Profile with React DevTools to identify slow components
+- [ ] Memoize expensive calculations with `useMemo`
+- [ ] Memoize callback functions with `useCallback`
+- [ ] Wrap expensive components with `React.memo`
+- [ ] Use stable keys for lists
+- [ ] Split large contexts into smaller ones
+- [ ] Implement code splitting for large components
+- [ ] Virtualize long lists
+- [ ] Measure improvements with real user metrics
+
+## Related Resources
+
+- [Memoization Techniques](/performance/memoization)
+- [React Profiler Component](/performance/profiler)
+- [React DevTools](https://react.dev/learn/react-developer-tools)

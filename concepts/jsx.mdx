@@ -1,0 +1,366 @@
+---
+title: JSX
+description: Understanding JSX syntax and how it transforms to React elements
+icon: brackets-curly
+---
+
+JSX is a syntax extension for JavaScript that lets you write HTML-like markup inside JavaScript files. While not required for React, JSX makes component code more readable and expressive.
+
+## What is JSX?
+
+JSX looks like HTML but it's actually JavaScript. Each JSX element is transformed into a JavaScript function call.
+
+```jsx
+const element = <h1>Hello, world!</h1>;
+```
+
+This JSX is transformed by a compiler (like Babel) into:
+
+```javascript
+const element = React.createElement('h1', null, 'Hello, world!');
+```
+
+## How JSX Transforms to JavaScript
+
+Under the hood, JSX elements are transformed into `ReactElement` objects using React's JSX runtime. The modern JSX transform (introduced in React 17) uses `jsx()` and `jsxs()` functions:
+
+<Tabs>
+  <Tab title="JSX">
+    ```jsx
+<div className="container">
+  <h1>Hello</h1>
+  <p>Welcome to React</p>
+</div>
+    ```
+  </Tab>
+  
+  <Tab title="Compiled (Modern)">
+    ```javascript
+import { jsx, jsxs } from 'react/jsx-runtime';
+
+jsxs('div', {
+  className: 'container',
+  children: [
+    jsx('h1', { children: 'Hello' }),
+    jsx('p', { children: 'Welcome to React' })
+  ]
+});
+    ```
+  </Tab>
+  
+  <Tab title="Compiled (Classic)">
+    ```javascript
+import React from 'react';
+
+React.createElement(
+  'div',
+  { className: 'container' },
+  React.createElement('h1', null, 'Hello'),
+  React.createElement('p', null, 'Welcome to React')
+);
+    ```
+  </Tab>
+</Tabs>
+
+<Note>
+  The modern JSX transform (using `jsx()` and `jsxs()`) was introduced in React 17 and has several advantages:
+  - You don't need to import React to use JSX
+  - Better performance in some cases
+  - Future compatibility improvements
+</Note>
+
+## The ReactElement Structure
+
+When JSX is compiled, it creates a `ReactElement` - a plain JavaScript object that describes what you want to see on the screen:
+
+```javascript
+// Simplified ReactElement structure
+const element = {
+  // Identifies this as a React element
+  $$typeof: Symbol.for('react.transitional.element'),
+  
+  // The type of element (string for DOM, function/class for components)
+  type: 'h1',
+  
+  // The key for reconciliation (if provided)
+  key: null,
+  
+  // The props including children
+  props: {
+    children: 'Hello, world!'
+  }
+};
+```
+
+<Tip>
+  React elements are **immutable**. Once created, you can't change their props or children. To update the UI, you create a new element and pass it to the renderer.
+</Tip>
+
+## Embedding Expressions
+
+You can embed any JavaScript expression in JSX by wrapping it in curly braces:
+
+```jsx
+const name = 'Alice';
+const element = <h1>Hello, {name}!</h1>;
+
+function formatName(user) {
+  return user.firstName + ' ' + user.lastName;
+}
+
+const user = {
+  firstName: 'Harper',
+  lastName: 'Perez'
+};
+
+const greeting = (
+  <h1>
+    Hello, {formatName(user)}!
+  </h1>
+);
+```
+
+You can use any valid JavaScript expression:
+
+```jsx
+<div>
+  {/* Arithmetic */}
+  <p>2 + 2 = {2 + 2}</p>
+  
+  {/* Function calls */}
+  <p>{getUserName()}</p>
+  
+  {/* Conditional expressions */}
+  <p>{isLoggedIn ? 'Welcome back!' : 'Please sign in'}</p>
+  
+  {/* Array methods */}
+  <ul>
+    {items.map(item => <li key={item.id}>{item.name}</li>)}
+  </ul>
+</div>
+```
+
+## JSX Attributes
+
+You can specify attributes using either quotes for string literals or curly braces for expressions:
+
+```jsx
+// String literals
+const element = <img src="avatar.png" alt="User avatar" />;
+
+// Expressions
+const element = <img src={user.avatarUrl} alt={user.name} />;
+
+// Multiple attributes
+const element = (
+  <button
+    className="btn btn-primary"
+    onClick={handleClick}
+    disabled={isLoading}
+  >
+    Submit
+  </button>
+);
+```
+
+### Attribute Naming
+
+Since JSX is JavaScript, attribute names use camelCase:
+
+- `className` instead of `class`
+- `htmlFor` instead of `for`
+- `onClick` instead of `onclick`
+- `tabIndex` instead of `tabindex`
+
+```jsx
+<label htmlFor="email" className="form-label">
+  Email Address
+</label>
+<input
+  id="email"
+  className="form-input"
+  tabIndex={0}
+  onChange={handleChange}
+/>
+```
+
+## Special Props: key and ref
+
+### The key Prop
+
+When creating lists of elements, you should provide a unique `key` prop to help React identify which items have changed:
+
+```jsx
+const items = [
+  { id: 1, text: 'First' },
+  { id: 2, text: 'Second' },
+  { id: 3, text: 'Third' }
+];
+
+const list = (
+  <ul>
+    {items.map(item => (
+      <li key={item.id}>{item.text}</li>
+    ))}
+  </ul>
+);
+```
+
+<Warning>
+  The `key` prop is special and is **not** passed to your component as a prop. If you need the same value in your component, pass it explicitly with a different name:
+  
+  ```jsx
+  <Item key={item.id} itemId={item.id} />
+  ```
+</Warning>
+
+### The ref Prop
+
+In React 19+, `ref` is now a regular prop (though it's still special in how React handles it):
+
+```jsx
+function MyInput({ ref }) {
+  return <input ref={ref} />;
+}
+
+function Parent() {
+  const inputRef = useRef(null);
+  
+  return <MyInput ref={inputRef} />;
+}
+```
+
+## JSX Represents Objects
+
+Because JSX compiles to function calls, it can be used anywhere JavaScript expressions can be used:
+
+```jsx
+// Return from functions
+function getGreeting(user) {
+  if (user) {
+    return <h1>Hello, {user.name}!</h1>;
+  }
+  return <h1>Hello, Stranger.</h1>;
+}
+
+// Assign to variables
+const element = <h1>Hello!</h1>;
+
+// Store in arrays
+const elements = [
+  <h1 key="1">First</h1>,
+  <h2 key="2">Second</h2>
+];
+
+// Pass as arguments
+function render(element) {
+  root.render(element);
+}
+render(<App />);
+```
+
+## JSX Children
+
+JSX tags can contain children:
+
+```jsx
+// Self-closing tags for empty elements
+<img src="photo.jpg" />
+
+// Opening and closing tags for elements with children
+<div>
+  <h1>Title</h1>
+  <p>Description</p>
+</div>
+```
+
+Children can be:
+
+```jsx
+// Text
+<p>Hello, world!</p>
+
+// Other JSX elements
+<div>
+  <Header />
+  <Content />
+</div>
+
+// Expressions
+<p>{calculateValue()}</p>
+
+// Mixed
+<div>
+  Hello, {name}!
+  <br />
+  Welcome to React.
+</div>
+
+// Arrays (with keys)
+<ul>
+  {items.map(item => <li key={item.id}>{item.text}</li>)}
+</ul>
+```
+
+## JSX Prevents Injection Attacks
+
+React DOM escapes any values embedded in JSX before rendering them, preventing XSS (cross-site-scripting) attacks:
+
+```jsx
+const userInput = '<script>alert("XSS")</script>';
+
+// This is safe - the string will be escaped
+const element = <div>{userInput}</div>;
+// Renders: <div>&lt;script&gt;alert("XSS")&lt;/script&gt;</div>
+```
+
+<Tip>
+  Everything in JSX is converted to a string before being rendered, so you can never inject anything that's not explicitly written in your application.
+</Tip>
+
+## Fragments
+
+Fragments let you group multiple children without adding extra DOM nodes:
+
+```jsx
+function Table() {
+  return (
+    <table>
+      <tbody>
+        <tr>
+          <Columns />
+        </tr>
+      </tbody>
+    </table>
+  );
+}
+
+function Columns() {
+  return (
+    <>
+      <td>Column 1</td>
+      <td>Column 2</td>
+    </>
+  );
+}
+```
+
+The short syntax `<>...</>` is equivalent to `<React.Fragment>...</React.Fragment>`. Use the full syntax when you need to pass a `key`:
+
+```jsx
+<React.Fragment key={item.id}>
+  <dt>{item.term}</dt>
+  <dd>{item.description}</dd>
+</React.Fragment>
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Props and State" icon="database" href="/concepts/props-and-state">
+    Learn how to pass data and manage state
+  </Card>
+  <Card title="Rendering" icon="paintbrush" href="/concepts/rendering">
+    Understand how React renders elements to the DOM
+  </Card>
+</CardGroup>

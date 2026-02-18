@@ -1,0 +1,492 @@
+---
+title: useImperativeHandle
+description: Customize the handle exposed as a ref
+---
+
+`useImperativeHandle` is a React Hook that lets you customize the handle exposed as a ref.
+
+```typescript
+function useImperativeHandle<T>(
+  ref: { current: T | null } | ((inst: T | null) => mixed) | null | void,
+  create: () => T,
+  deps: Array<mixed> | void | null
+): void
+```
+
+## Parameters
+
+<ParamField path="ref" type="Ref<T>" required>
+  The `ref` you received from the `forwardRef` render function as the second argument.
+</ParamField>
+
+<ParamField path="create" type="() => T" required>
+  A function that takes no arguments and returns the ref handle you want to expose. The ref handle can be of any type. Usually, you will return an object with the methods you want to expose.
+</ParamField>
+
+<ParamField path="deps" type="Array<mixed> | void | null">
+  The list of all reactive values referenced inside the `create` code. React will re-run `create` and update the ref when dependencies change.
+  
+  - If omitted, the handle is recreated on every render
+  - If `[]` (empty array), the handle is created once
+  - If `[dep1, dep2]`, the handle updates when dependencies change
+</ParamField>
+
+## Returns
+
+`useImperativeHandle` returns `undefined`.
+
+## Usage
+
+### Exposing a custom ref handle to the parent component
+
+By default, components don't expose their DOM nodes to parent components. You can opt into this by using `forwardRef` and `useImperativeHandle`:
+
+```javascript
+import { forwardRef, useRef, useImperativeHandle } from 'react';
+
+const MyInput = forwardRef(function MyInput(props, ref) {
+  const inputRef = useRef(null);
+  
+  useImperativeHandle(ref, () => {
+    return {
+      focus() {
+        inputRef.current.focus();
+      },
+      scrollIntoView() {
+        inputRef.current.scrollIntoView();
+      }
+    };
+  }, []);
+  
+  return <input ref={inputRef} {...props} />;
+});
+
+// Usage in parent
+function Form() {
+  const inputRef = useRef(null);
+  
+  function handleClick() {
+    inputRef.current.focus();
+  }
+  
+  return (
+    <>
+      <MyInput ref={inputRef} />
+      <button onClick={handleClick}>Focus input</button>
+    </>
+  );
+}
+```
+
+<Warning>
+**Do not overuse refs.** You should only use refs for imperative behaviors that you can't express as props: scrolling to a node, focusing a node, triggering an animation, selecting text, and so on.
+
+**If you can express something as a prop, you should not use a ref.** For example, instead of exposing an imperative handle like `{ open, close }` from a `Modal` component, it's better to take `isOpen` as a prop like `<Modal isOpen={isOpen} />`.
+</Warning>
+
+### Exposing specific methods
+
+Limit the exposed API to only what the parent needs:
+
+```javascript
+const VideoPlayer = forwardRef(function VideoPlayer({ src }, ref) {
+  const videoRef = useRef(null);
+  
+  useImperativeHandle(ref, () => {
+    return {
+      play() {
+        videoRef.current.play();
+      },
+      pause() {
+        videoRef.current.pause();
+      },
+      getCurrentTime() {
+        return videoRef.current.currentTime;
+      }
+    };
+  }, []);
+  
+  return <video ref={videoRef} src={src} />;
+});
+
+// Parent only has access to the methods you exposed
+function App() {
+  const playerRef = useRef(null);
+  
+  function handlePlay() {
+    playerRef.current.play();
+  }
+  
+  function handlePause() {
+    playerRef.current.pause();
+  }
+  
+  function logTime() {
+    console.log(playerRef.current.getCurrentTime());
+  }
+  
+  return (
+    <>
+      <VideoPlayer ref={playerRef} src="video.mp4" />
+      <button onClick={handlePlay}>Play</button>
+      <button onClick={handlePause}>Pause</button>
+      <button onClick={logTime}>Log time</button>
+    </>
+  );
+}
+```
+
+## Common Patterns
+
+### Custom input component
+
+```javascript
+const CustomInput = forwardRef(function CustomInput(props, ref) {
+  const inputRef = useRef(null);
+  
+  useImperativeHandle(ref, () => {
+    return {
+      focus() {
+        inputRef.current.focus();
+      },
+      clear() {
+        inputRef.current.value = '';
+      },
+      getValue() {
+        return inputRef.current.value;
+      },
+      setValue(value) {
+        inputRef.current.value = value;
+      }
+    };
+  }, []);
+  
+  return <input ref={inputRef} {...props} />;
+});
+```
+
+### Form handle
+
+```javascript
+const Form = forwardRef(function Form({ onSubmit }, ref) {
+  const [fields, setFields] = useState({});
+  
+  useImperativeHandle(ref, () => {
+    return {
+      reset() {
+        setFields({});
+      },
+      setField(name, value) {
+        setFields(f => ({ ...f, [name]: value }));
+      },
+      getFields() {
+        return fields;
+      },
+      submit() {
+        onSubmit(fields);
+      }
+    };
+  }, [fields, onSubmit]);
+  
+  return (
+    <form>
+      {/* form fields */}
+    </form>
+  );
+});
+```
+
+### Modal handle
+
+```javascript
+const Modal = forwardRef(function Modal({ children }, ref) {
+  const dialogRef = useRef(null);
+  
+  useImperativeHandle(ref, () => {
+    return {
+      open() {
+        dialogRef.current.showModal();
+      },
+      close() {
+        dialogRef.current.close();
+      }
+    };
+  }, []);
+  
+  return (
+    <dialog ref={dialogRef}>
+      {children}
+    </dialog>
+  );
+});
+
+// Usage
+function App() {
+  const modalRef = useRef(null);
+  
+  return (
+    <>
+      <button onClick={() => modalRef.current.open()}>Open</button>
+      <Modal ref={modalRef}>
+        <p>Modal content</p>
+        <button onClick={() => modalRef.current.close()}>Close</button>
+      </Modal>
+    </>
+  );
+}
+```
+
+### With dependencies
+
+```javascript
+const Counter = forwardRef(function Counter({ step = 1 }, ref) {
+  const [count, setCount] = useState(0);
+  
+  useImperativeHandle(ref, () => {
+    return {
+      increment() {
+        setCount(c => c + step);
+      },
+      decrement() {
+        setCount(c => c - step);
+      },
+      reset() {
+        setCount(0);
+      },
+      getValue() {
+        return count;
+      }
+    };
+  }, [step]); // Recreate handle when step changes
+  
+  return <div>Count: {count}</div>;
+});
+```
+
+## TypeScript
+
+```typescript
+import { forwardRef, useRef, useImperativeHandle } from 'react';
+
+// Define the ref handle type
+interface InputHandle {
+  focus: () => void;
+  clear: () => void;
+}
+
+interface InputProps {
+  placeholder?: string;
+}
+
+const MyInput = forwardRef<InputHandle, InputProps>(
+  function MyInput(props, ref) {
+    const inputRef = useRef<HTMLInputElement>(null);
+    
+    useImperativeHandle(ref, () => {
+      return {
+        focus() {
+          inputRef.current?.focus();
+        },
+        clear() {
+          if (inputRef.current) {
+            inputRef.current.value = '';
+          }
+        }
+      };
+    }, []);
+    
+    return <input ref={inputRef} {...props} />;
+  }
+);
+
+// Usage with type safety
+function Parent() {
+  const inputRef = useRef<InputHandle>(null);
+  
+  function handleClick() {
+    inputRef.current?.focus(); // TypeScript knows these methods exist
+    inputRef.current?.clear();
+  }
+  
+  return (
+    <>
+      <MyInput ref={inputRef} />
+      <button onClick={handleClick}>Focus and clear</button>
+    </>
+  );
+}
+```
+
+### Generic component with ref
+
+```typescript
+interface ListHandle<T> {
+  scrollToItem: (index: number) => void;
+  getItems: () => T[];
+}
+
+interface ListProps<T> {
+  items: T[];
+  renderItem: (item: T) => React.ReactNode;
+}
+
+const List = forwardRef(function List<T>(
+  props: ListProps<T>,
+  ref: React.Ref<ListHandle<T>>
+) {
+  const listRef = useRef<HTMLDivElement>(null);
+  
+  useImperativeHandle(ref, () => {
+    return {
+      scrollToItem(index: number) {
+        const element = listRef.current?.children[index] as HTMLElement;
+        element?.scrollIntoView();
+      },
+      getItems() {
+        return props.items;
+      }
+    };
+  }, [props.items]);
+  
+  return (
+    <div ref={listRef}>
+      {props.items.map(props.renderItem)}
+    </div>
+  );
+}) as <T>(props: ListProps<T> & { ref?: React.Ref<ListHandle<T>> }) => JSX.Element;
+```
+
+## Troubleshooting
+
+### My ref is null in the parent
+
+Make sure you're using `forwardRef`:
+
+```javascript
+// ❌ Without forwardRef - ref won't work
+function MyInput(props) {
+  return <input {...props} />;
+}
+
+// ✅ With forwardRef
+const MyInput = forwardRef(function MyInput(props, ref) {
+  return <input ref={ref} {...props} />;
+});
+```
+
+### The handle is recreated on every render
+
+Provide a dependency array:
+
+```javascript
+// ❌ Missing deps array - handle recreated every render
+useImperativeHandle(ref, () => {
+  return { focus: () => {} };
+});
+
+// ✅ With deps array
+useImperativeHandle(ref, () => {
+  return { focus: () => {} };
+}, []);
+```
+
+### When should I use useImperativeHandle?
+
+Use `useImperativeHandle` when:
+
+- ✅ You need to expose imperative methods (focus, scroll, play/pause)
+- ✅ You want to hide the internal implementation
+- ✅ You need to expose a subset of functionality
+
+Avoid `useImperativeHandle` when:
+
+- ❌ You can use props instead
+- ❌ You're exposing too many methods (component is doing too much)
+- ❌ The parent should control state (use props)
+
+```javascript
+// ❌ Bad: Using ref for state that should be props
+const Modal = forwardRef(function Modal({ children }, ref) {
+  const [isOpen, setIsOpen] = useState(false);
+  
+  useImperativeHandle(ref, () => ({
+    open: () => setIsOpen(true),
+    close: () => setIsOpen(false)
+  }));
+  
+  return isOpen ? <dialog>{children}</dialog> : null;
+});
+
+// ✅ Good: Using props for state
+function Modal({ isOpen, onClose, children }) {
+  return isOpen ? (
+    <dialog>
+      {children}
+      <button onClick={onClose}>Close</button>
+    </dialog>
+  ) : null;
+}
+```
+
+## Best Practices
+
+### Keep the handle simple
+
+```javascript
+// ✅ Good: Simple, focused API
+useImperativeHandle(ref, () => ({
+  focus,
+  blur,
+  scrollIntoView
+}), []);
+
+// ❌ Bad: Too many methods, complex API
+useImperativeHandle(ref, () => ({
+  focus, blur, scrollIntoView, setValue, getValue,
+  validate, reset, submit, clear, enable, disable,
+  show, hide, highlight, ... // too much!
+}), []);
+```
+
+### Name methods clearly
+
+```javascript
+// ✅ Clear, imperative names
+useImperativeHandle(ref, () => ({
+  focus() { /* ... */ },
+  reset() { /* ... */ },
+  submit() { /* ... */ }
+}), []);
+
+// ❌ Confusing names
+useImperativeHandle(ref, () => ({
+  doIt() { /* ... */ },
+  handle() { /* ... */ },
+  update() { /* ... */ }
+}), []);
+```
+
+### Document the ref API
+
+```typescript
+/**
+ * Custom input component with imperative methods.
+ * 
+ * @example
+ * const ref = useRef<InputHandle>(null);
+ * ref.current?.focus();
+ * ref.current?.clear();
+ */
+interface InputHandle {
+  /** Focus the input element */
+  focus: () => void;
+  /** Clear the input value */
+  clear: () => void;
+}
+
+const MyInput = forwardRef<InputHandle, InputProps>(
+  function MyInput(props, ref) {
+    // ...
+  }
+);
+```

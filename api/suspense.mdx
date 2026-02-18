@@ -1,0 +1,624 @@
+---
+title: Suspense
+description: Display fallback content while children are loading
+---
+
+`Suspense` lets you display a fallback UI while its children are loading. It enables components to "suspend" rendering while waiting for asynchronous data to load.
+
+```javascript
+import { Suspense } from 'react';
+
+function App() {
+  return (
+    <Suspense fallback={<Loading />}>
+      <ProfilePage />
+    </Suspense>
+  );
+}
+```
+
+### Type
+
+```typescript
+const Suspense: symbol = Symbol.for('react.suspense')
+```
+
+Internally, `Suspense` is represented by the symbol `Symbol.for('react.suspense')` (the value of `REACT_SUSPENSE_TYPE` in React's source).
+
+## Props
+
+<ParamField path="children" type="ReactNode" required>
+  The actual UI you intend to render. If `children` suspends while rendering, the Suspense boundary will switch to rendering the `fallback`.
+</ParamField>
+
+<ParamField path="fallback" type="ReactNode" required>
+  An alternate UI to render in place of the actual UI if it hasn't finished loading. Any valid React node is accepted, though in practice, a fallback is a lightweight placeholder view such as a loading spinner or skeleton.
+  
+  The fallback will automatically be replaced by the children when the data is ready.
+</ParamField>
+
+## Usage
+
+### Basic Example
+
+```javascript
+import { Suspense } from 'react';
+
+function App() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <DataComponent />
+    </Suspense>
+  );
+}
+```
+
+### Multiple Suspense Boundaries
+
+You can have multiple Suspense boundaries at different levels:
+
+```javascript
+function App() {
+  return (
+    <Suspense fallback={<PageLoading />}>
+      <Header />
+      
+      <Suspense fallback={<ContentLoading />}>
+        <MainContent />
+      </Suspense>
+      
+      <Suspense fallback={<SidebarLoading />}>
+        <Sidebar />
+      </Suspense>
+      
+      <Footer />
+    </Suspense>
+  );
+}
+```
+
+**How it works:**
+
+- Each section can suspend independently
+- Inner Suspense boundaries catch suspensions first
+- If multiple children suspend, only the nearest Suspense boundary's fallback is shown
+
+### Nested Suspense
+
+Suspense boundaries can be nested to create cascading loading states:
+
+```javascript
+function App() {
+  return (
+    // Outer boundary: entire page
+    <Suspense fallback={<FullPageSpinner />}>
+      <Layout>
+        {/* Inner boundary: just the content */}
+        <Suspense fallback={<ContentSkeleton />}>
+          <ArticleContent />
+        </Suspense>
+        
+        {/* Another inner boundary: sidebar */}
+        <Suspense fallback={<SidebarSkeleton />}>
+          <RelatedArticles />
+        </Suspense>
+      </Layout>
+    </Suspense>
+  );
+}
+```
+
+## What Can Suspend?
+
+Suspense works with:
+
+### 1. React.lazy() - Code Splitting
+
+```javascript
+import { Suspense, lazy } from 'react';
+
+const HeavyComponent = lazy(() => import('./HeavyComponent'));
+
+function App() {
+  return (
+    <Suspense fallback={<div>Loading component...</div>}>
+      <HeavyComponent />
+    </Suspense>
+  );
+}
+```
+
+### 2. Data Fetching with Frameworks
+
+Frameworks like Relay, Next.js, and Remix support Suspense for data fetching:
+
+```javascript
+// Example with a framework that supports Suspense
+function ProfilePage() {
+  // This component suspends while data loads
+  const user = use(fetchUser());
+  
+  return <h1>{user.name}</h1>;
+}
+
+function App() {
+  return (
+    <Suspense fallback={<Loading />}>
+      <ProfilePage />
+    </Suspense>
+  );
+}
+```
+
+### 3. React 19+ use() Hook
+
+```javascript
+import { use, Suspense } from 'react';
+
+function UserProfile({ userPromise }) {
+  // use() suspends until the promise resolves
+  const user = use(userPromise);
+  
+  return <div>{user.name}</div>;
+}
+
+function App() {
+  const userPromise = fetchUser();
+  
+  return (
+    <Suspense fallback={<div>Loading user...</div>}>
+      <UserProfile userPromise={userPromise} />
+    </Suspense>
+  );
+}
+```
+
+### 4. Server Components (React Server Components)
+
+```javascript
+// Server Component (loads data on the server)
+async function ServerComponent() {
+  const data = await fetchData();
+  return <div>{data}</div>;
+}
+
+// Client Component
+function ClientComponent() {
+  return (
+    <Suspense fallback={<Loading />}>
+      <ServerComponent />
+    </Suspense>
+  );
+}
+```
+
+## Showing Content as it Loads
+
+Use multiple Suspense boundaries to show content progressively:
+
+```javascript
+function App() {
+  return (
+    <div>
+      {/* Header loads immediately (no Suspense) */}
+      <Header />
+      
+      {/* Main content suspends */}
+      <Suspense fallback={<MainSkeleton />}>
+        <MainContent />
+        
+        {/* Comments load after main content */}
+        <Suspense fallback={<CommentsSkeleton />}>
+          <Comments />
+        </Suspense>
+      </Suspense>
+      
+      {/* Footer loads immediately */}
+      <Footer />
+    </div>
+  );
+}
+```
+
+**Loading sequence:**
+1. Header and Footer show immediately
+2. MainSkeleton shows while MainContent loads
+3. MainContent appears when ready
+4. CommentsSkeleton shows while Comments load
+5. Comments appear when ready
+
+## Error Boundaries
+
+Suspense works together with Error Boundaries to handle errors during loading:
+
+```javascript
+import { Suspense } from 'react';
+import { ErrorBoundary } from 'react-error-boundary';
+
+function App() {
+  return (
+    <ErrorBoundary fallback={<ErrorPage />}>
+      <Suspense fallback={<Loading />}>
+        <DataComponent />
+      </Suspense>
+    </ErrorBoundary>
+  );
+}
+```
+
+**What happens:**
+
+- If `DataComponent` suspends → `<Loading />` is shown
+- If `DataComponent` throws an error → `<ErrorPage />` is shown
+- If `DataComponent` succeeds → component renders normally
+
+### Combined Pattern
+
+```javascript
+function Page() {
+  return (
+    <ErrorBoundary
+      fallback={(error) => (
+        <div>
+          <h1>Something went wrong</h1>
+          <p>{error.message}</p>
+          <button onClick={retry}>Retry</button>
+        </div>
+      )}
+    >
+      <Suspense fallback={<PageSkeleton />}>
+        <PageContent />
+      </Suspense>
+    </ErrorBoundary>
+  );
+}
+```
+
+## Transitions and Suspense
+
+Use transitions to avoid hiding already visible content:
+
+```javascript
+import { Suspense, useState, useTransition } from 'react';
+
+function App() {
+  const [tab, setTab] = useState('about');
+  const [isPending, startTransition] = useTransition();
+  
+  function selectTab(nextTab) {
+    startTransition(() => {
+      setTab(nextTab);
+    });
+  }
+  
+  return (
+    <div>
+      <button onClick={() => selectTab('about')}>About</button>
+      <button onClick={() => selectTab('posts')}>Posts</button>
+      <button onClick={() => selectTab('contact')}>Contact</button>
+      
+      {isPending && <Spinner />}
+      
+      <Suspense fallback={<Spinner />}>
+        {tab === 'about' && <AboutTab />}
+        {tab === 'posts' && <PostsTab />}
+        {tab === 'contact' && <ContactTab />}
+      </Suspense>
+    </div>
+  );
+}
+```
+
+**Benefits:**
+
+- The current tab stays visible while the new tab loads
+- A spinner indicates loading is happening
+- Better user experience than showing fallback immediately
+
+## Preventing Unwanted Fallbacks
+
+### Problem: Fallback Flashing
+
+If data loads quickly, showing a loading spinner can create a jarring flash:
+
+```javascript
+// ❌ Might flash loading state
+<Suspense fallback={<Spinner />}>
+  <FastComponent />
+</Suspense>
+```
+
+### Solution: Use Transitions
+
+```javascript
+import { useState, useTransition, Suspense } from 'react';
+
+function App() {
+  const [resource, setResource] = useState(initialResource);
+  const [isPending, startTransition] = useTransition();
+  
+  function refresh() {
+    startTransition(() => {
+      setResource(fetchNewResource());
+    });
+  }
+  
+  return (
+    <>
+      <button onClick={refresh} disabled={isPending}>
+        {isPending ? 'Refreshing...' : 'Refresh'}
+      </button>
+      
+      <Suspense fallback={<Spinner />}>
+        <DataDisplay resource={resource} />
+      </Suspense>
+    </>
+  );
+}
+```
+
+**How it helps:**
+
+- The old content stays visible during refresh
+- The button shows loading state instead
+- Fallback only shows for initial load, not refreshes
+
+## Use Cases
+
+### Code Splitting
+
+```javascript
+import { lazy, Suspense } from 'react';
+
+const Dashboard = lazy(() => import('./Dashboard'));
+const Settings = lazy(() => import('./Settings'));
+const Profile = lazy(() => import('./Profile'));
+
+function App({ route }) {
+  return (
+    <Suspense fallback={<PageLoader />}>
+      {route === 'dashboard' && <Dashboard />}
+      {route === 'settings' && <Settings />}
+      {route === 'profile' && <Profile />}
+    </Suspense>
+  );
+}
+```
+
+### Data Fetching
+
+```javascript
+import { Suspense } from 'react';
+
+function App() {
+  return (
+    <Suspense fallback={<ArticleSkeleton />}>
+      <Article id={42} />
+    </Suspense>
+  );
+}
+
+function Article({ id }) {
+  // Suspends while loading
+  const article = use(fetchArticle(id));
+  
+  return (
+    <article>
+      <h1>{article.title}</h1>
+      <p>{article.content}</p>
+      
+      <Suspense fallback={<CommentsSkeleton />}>
+        <Comments articleId={id} />
+      </Suspense>
+    </article>
+  );
+}
+```
+
+### Parallel Loading
+
+```javascript
+function App() {
+  return (
+    <Suspense fallback={<FullPageLoader />}>
+      {/* All these load in parallel */}
+      <UserProfile />
+      <UserPosts />
+      <UserFollowers />
+    </Suspense>
+  );
+}
+
+// Fallback shows until ALL children have loaded
+```
+
+### Waterfall Prevention
+
+Start requests before rendering:
+
+```javascript
+// ❌ Bad: Waterfall
+function BadComponent() {
+  return (
+    <Suspense fallback={<Loading />}>
+      <Parent>
+        <Suspense fallback={<Loading />}>
+          <Child /> {/* Doesn't start loading until Parent loads */}
+        </Suspense>
+      </Parent>
+    </Suspense>
+  );
+}
+
+// ✅ Good: Parallel
+function GoodComponent() {
+  // Start both requests immediately
+  const parentData = fetchParent();
+  const childData = fetchChild();
+  
+  return (
+    <Suspense fallback={<Loading />}>
+      <Parent data={parentData}>
+        <Suspense fallback={<Loading />}>
+          <Child data={childData} />
+        </Suspense>
+      </Parent>
+    </Suspense>
+  );
+}
+```
+
+## Best Practices
+
+### 1. Use Meaningful Fallbacks
+
+```javascript
+// ❌ Generic spinner
+<Suspense fallback={<Spinner />}>
+  <ProductList />
+</Suspense>
+
+// ✅ Skeleton that matches content
+<Suspense fallback={<ProductListSkeleton />}>
+  <ProductList />
+</Suspense>
+```
+
+### 2. Place Boundaries Strategically
+
+```javascript
+// ✅ Good: Granular boundaries
+function Page() {
+  return (
+    <>
+      <Header /> {/* No Suspense - loads immediately */}
+      
+      <Suspense fallback={<ContentSkeleton />}>
+        <MainContent />
+      </Suspense>
+      
+      <Suspense fallback={<SidebarSkeleton />}>
+        <Sidebar />
+      </Suspense>
+    </>
+  );
+}
+
+// ❌ Bad: Single boundary for everything
+function Page() {
+  return (
+    <Suspense fallback={<FullPageLoader />}>
+      <Header />
+      <MainContent />
+      <Sidebar />
+    </Suspense>
+  );
+}
+```
+
+### 3. Handle Errors
+
+```javascript
+// ✅ Always wrap Suspense with ErrorBoundary
+function SafeContent() {
+  return (
+    <ErrorBoundary fallback={<ErrorDisplay />}>
+      <Suspense fallback={<Loading />}>
+        <Content />
+      </Suspense>
+    </ErrorBoundary>
+  );
+}
+```
+
+### 4. Use Transitions for Updates
+
+```javascript
+// ✅ Use transitions for better UX
+function TabContainer() {
+  const [tab, setTab] = useState('home');
+  const [isPending, startTransition] = useTransition();
+  
+  function switchTab(newTab) {
+    startTransition(() => {
+      setTab(newTab);
+    });
+  }
+  
+  return (
+    <Suspense fallback={<TabSkeleton />}>
+      <TabContent tab={tab} />
+    </Suspense>
+  );
+}
+```
+
+## Common Pitfalls
+
+<Warning>
+**Pitfall #1: Creating promises during render**
+
+```javascript
+// ❌ Creates new promise on every render
+function BadComponent() {
+  const data = use(fetchData()); // New promise each time!
+  return <div>{data}</div>;
+}
+
+// ✅ Create promise outside or use a cache
+const dataPromise = fetchData();
+
+function GoodComponent() {
+  const data = use(dataPromise);
+  return <div>{data}</div>;
+}
+```
+
+**Pitfall #2: Suspense without Error Boundary**
+
+```javascript
+// ❌ Errors will crash the app
+<Suspense fallback={<Loading />}>
+  <Component />
+</Suspense>
+
+// ✅ Handle errors gracefully
+<ErrorBoundary fallback={<Error />}>
+  <Suspense fallback={<Loading />}>
+    <Component />
+  </Suspense>
+</ErrorBoundary>
+```
+
+**Pitfall #3: Too many Suspense boundaries**
+
+```javascript
+// ❌ Creates loading flashes everywhere
+function OverEngineered() {
+  return (
+    <Suspense fallback={<Spinner />}>
+      <Suspense fallback={<Spinner />}>
+        <Suspense fallback={<Spinner />}>
+          <Content />
+        </Suspense>
+      </Suspense>
+    </Suspense>
+  );
+}
+
+// ✅ Use boundaries where they make sense
+function Balanced() {
+  return (
+    <Suspense fallback={<PageSkeleton />}>
+      <Content />
+    </Suspense>
+  );
+}
+```
+</Warning>
+
+<Note>
+**Server-Side Rendering:**
+
+Suspense works with SSR to stream HTML to the client. Components that suspend are rendered on the server and sent when ready, allowing the browser to show content progressively.
+</Note>

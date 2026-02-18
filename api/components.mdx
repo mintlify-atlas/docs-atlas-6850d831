@@ -1,0 +1,355 @@
+---
+title: Component & PureComponent
+description: Base classes for creating React components with ES6 classes
+---
+
+React provides two base classes for creating components using ES6 class syntax: `Component` and `PureComponent`.
+
+<Note>
+Function components with Hooks are now the recommended way to write React components. However, class components are still fully supported.
+</Note>
+
+## Component
+
+Base class for React components when defined using ES6 classes.
+
+```javascript
+import { Component } from 'react';
+
+class Greeting extends Component {
+  render() {
+    return <h1>Hello, {this.props.name}!</h1>;
+  }
+}
+```
+
+### Constructor
+
+```typescript
+class Component {
+  constructor(props: Props, context?: Context, updater?: Updater)
+}
+```
+
+<ParamField path="props" type="object" required>
+  The initial props passed to the component.
+</ParamField>
+
+<ParamField path="context" type="object">
+  The context object (legacy context API).
+</ParamField>
+
+<ParamField path="updater" type="object">
+  The updater object injected by the renderer. In most cases, you won't access this directly.
+</ParamField>
+
+### Instance Properties
+
+#### this.props
+
+The props object passed to the component. Props are inputs from parent components.
+
+```javascript
+class Welcome extends Component {
+  render() {
+    return <h1>Hello, {this.props.name}</h1>;
+  }
+}
+```
+
+#### this.state
+
+The state object containing component-specific data. State is private to the component.
+
+```javascript
+class Counter extends Component {
+  state = { count: 0 };
+  
+  render() {
+    return <div>Count: {this.state.count}</div>;
+  }
+}
+```
+
+#### this.refs
+
+<Warning>
+Legacy string refs are deprecated. Use `createRef()` or callback refs instead.
+</Warning>
+
+An object containing refs to child elements. This is frozen in development mode.
+
+#### this.context
+
+The context value from the nearest matching Provider above this component in the tree.
+
+### Instance Methods
+
+#### setState()
+
+Schedule an update to the component's state object. This is the primary method for triggering UI updates.
+
+```typescript
+setState(
+  partialState: object | ((state: State, props: Props) => object),
+  callback?: () => void
+): void
+```
+
+<ParamField path="partialState" type="object | function" required>
+  An object containing the subset of state to update, or a function that returns such an object.
+  
+  When a function is provided, it receives the current state and props as arguments and should return an object to merge into the state.
+</ParamField>
+
+<ParamField path="callback" type="function">
+  An optional callback that will be executed after the state is updated and the component is re-rendered.
+</ParamField>
+
+**Usage:**
+
+```javascript
+// Object form
+this.setState({ count: this.state.count + 1 });
+
+// Function form - recommended when new state depends on old state
+this.setState((state, props) => ({
+  count: state.count + 1
+}));
+
+// With callback
+this.setState({ isOpen: true }, () => {
+  console.log('State updated and component re-rendered');
+});
+```
+
+**Important notes:**
+
+- `setState()` is asynchronous. The state may not be updated immediately.
+- Multiple `setState()` calls may be batched together for performance.
+- Never mutate `this.state` directly. Always use `setState()`.
+- When new state depends on previous state, use the function form to avoid race conditions.
+
+**Throws:**
+
+- `Error` if `partialState` is not an object, function, or null.
+
+#### forceUpdate()
+
+Force the component to re-render. This skips `shouldComponentUpdate()` but still calls lifecycle methods.
+
+```typescript
+forceUpdate(callback?: () => void): void
+```
+
+<ParamField path="callback" type="function">
+  An optional callback that will be executed after the component is re-rendered.
+</ParamField>
+
+**Usage:**
+
+```javascript
+this.forceUpdate();
+
+// With callback
+this.forceUpdate(() => {
+  console.log('Component re-rendered');
+});
+```
+
+<Warning>
+Avoid using `forceUpdate()` when possible. It indicates that your component is not following React's data flow. Consider restructuring your code to use props or state instead.
+</Warning>
+
+**What it does:**
+
+- Bypasses `shouldComponentUpdate()`
+- Calls `componentWillUpdate()` and `componentDidUpdate()` (or `UNSAFE_componentWillUpdate()` in older versions)
+- Triggers a re-render of the component
+
+### Lifecycle Methods
+
+Class components have access to several lifecycle methods:
+
+#### Mounting
+
+- `constructor(props)` - Initialize state and bind methods
+- `static getDerivedStateFromProps(props, state)` - Sync state to props changes
+- `render()` - Return the component's JSX (required)
+- `componentDidMount()` - Run side effects after component is added to the DOM
+
+#### Updating
+
+- `static getDerivedStateFromProps(props, state)` - Sync state to props changes
+- `shouldComponentUpdate(nextProps, nextState)` - Optimize by skipping unnecessary renders
+- `render()` - Return updated JSX
+- `getSnapshotBeforeUpdate(prevProps, prevState)` - Capture DOM information before update
+- `componentDidUpdate(prevProps, prevState, snapshot)` - Run side effects after update
+
+#### Unmounting
+
+- `componentWillUnmount()` - Cleanup before component is removed
+
+#### Error Handling
+
+- `static getDerivedStateFromError(error)` - Update state when a child component throws
+- `componentDidCatch(error, info)` - Log error information
+
+### Deprecated Methods
+
+<Warning>
+These methods are deprecated and should not be used in new code:
+
+- `isMounted()` - Instead, clean up subscriptions in `componentWillUnmount()` to prevent memory leaks
+- `replaceState()` - Use `setState()` instead
+</Warning>
+
+## PureComponent
+
+A variant of `Component` that implements `shouldComponentUpdate()` with a shallow prop and state comparison.
+
+```javascript
+import { PureComponent } from 'react';
+
+class Greeting extends PureComponent {
+  render() {
+    return <h1>Hello, {this.props.name}!</h1>;
+  }
+}
+```
+
+### Constructor
+
+```typescript
+class PureComponent {
+  constructor(props: Props, context?: Context, updater?: Updater)
+}
+```
+
+The constructor signature is identical to `Component`.
+
+### How it Works
+
+`PureComponent` is identical to `Component` except that it implements `shouldComponentUpdate()` with a shallow comparison of props and state:
+
+```javascript
+// PureComponent's built-in shouldComponentUpdate logic
+shouldComponentUpdate(nextProps, nextState) {
+  // Shallow comparison of props and state
+  return !shallowEqual(this.props, nextProps) || 
+         !shallowEqual(this.state, nextState);
+}
+```
+
+### When to Use PureComponent
+
+**Use `PureComponent` when:**
+
+- Your component renders the same output given the same props and state
+- Props and state contain only primitive values or immutable objects
+- You want automatic performance optimization without writing custom comparison logic
+
+**Don't use `PureComponent` when:**
+
+- Props or state contain mutable objects (the shallow comparison won't detect changes)
+- Props contain functions or objects created inline in the parent render (they'll always be different)
+- You need custom comparison logic (use `Component` with `shouldComponentUpdate()` instead)
+
+### Example
+
+```javascript
+import { PureComponent } from 'react';
+
+class CounterDisplay extends PureComponent {
+  render() {
+    console.log('Rendering CounterDisplay');
+    return <div>Count: {this.props.count}</div>;
+  }
+}
+
+// This component will only re-render when props.count changes
+// If the parent re-renders but count stays the same, 
+// CounterDisplay won't re-render
+```
+
+### Common Pitfalls
+
+<Warning>
+**Pitfall #1: Mutating state or props**
+
+```javascript
+// ❌ Bad - PureComponent won't detect this change
+this.state.items.push(newItem);
+this.setState({ items: this.state.items });
+
+// ✅ Good - Create a new array
+this.setState({ items: [...this.state.items, newItem] });
+```
+
+**Pitfall #2: Inline functions or objects in props**
+
+```javascript
+// ❌ Bad - Creates new function on every render
+<PureChild onClick={() => this.handleClick()} />
+
+// ✅ Good - Pass stable reference
+<PureChild onClick={this.handleClick} />
+```
+</Warning>
+
+## Comparison: Component vs PureComponent
+
+| Feature | Component | PureComponent |
+|---------|-----------|---------------|
+| shouldComponentUpdate | Not implemented (always re-renders) | Shallow comparison of props and state |
+| Performance | May re-render unnecessarily | Optimized, skips unnecessary re-renders |
+| When to use | When you need custom comparison or deal with mutable data | When props and state are immutable |
+| Memory usage | Lower | Slightly higher (stores previous props/state) |
+
+## Example: Complete Component
+
+```javascript
+import { Component } from 'react';
+
+class Timer extends Component {
+  constructor(props) {
+    super(props);
+    this.state = {
+      seconds: 0
+    };
+  }
+
+  componentDidMount() {
+    this.interval = setInterval(() => {
+      this.setState(state => ({
+        seconds: state.seconds + 1
+      }));
+    }, 1000);
+  }
+
+  componentDidUpdate(prevProps, prevState) {
+    if (this.state.seconds !== prevState.seconds) {
+      console.log(`Timer updated: ${this.state.seconds}s`);
+    }
+  }
+
+  componentWillUnmount() {
+    clearInterval(this.interval);
+  }
+
+  handleReset = () => {
+    this.setState({ seconds: 0 });
+  }
+
+  render() {
+    return (
+      <div>
+        <p>Seconds: {this.state.seconds}</p>
+        <button onClick={this.handleReset}>Reset</button>
+      </div>
+    );
+  }
+}
+
+export default Timer;
+```

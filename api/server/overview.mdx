@@ -1,0 +1,244 @@
+---
+title: Server Rendering Overview
+description: Overview of React server rendering APIs, SSR, SSG, streaming, and server components
+---
+
+# Server Rendering Overview
+
+React provides several APIs for rendering React components on the server. These APIs are exported from `react-dom/server` and enable server-side rendering (SSR), static site generation (SSG), and streaming HTML to the client.
+
+## When to Use Server Rendering
+
+Server rendering is useful when you need to:
+
+- **Improve initial page load performance** - Send HTML to the client immediately, allowing users to see content before JavaScript loads
+- **Enhance SEO** - Search engines can crawl and index your content more effectively
+- **Support devices with limited JavaScript** - Provide a baseline experience on devices where JavaScript may be disabled or slow
+- **Enable progressive enhancement** - Start with working HTML and enhance with JavaScript as it loads
+
+## Server Rendering APIs
+
+React provides different server rendering APIs for different use cases:
+
+### Legacy APIs (Synchronous)
+
+<CardGroup cols={2}>
+  <Card title="renderToString" icon="file-code" href="/api/server/render-to-string">
+    Synchronously render React components to an HTML string with React attributes
+  </Card>
+  <Card title="renderToStaticMarkup" icon="file" href="/api/server/render-to-static-markup">
+    Synchronously render React components to static HTML without React attributes
+  </Card>
+</CardGroup>
+
+**Limitations:**
+- No Suspense support
+- Blocking - must wait for entire tree to render
+- No streaming capabilities
+- Not recommended for new projects
+
+### Modern APIs (Streaming)
+
+<CardGroup cols={2}>
+  <Card title="renderToPipeableStream" icon="stream" href="/api/server/render-to-pipe">
+    Stream HTML to a Node.js Writable stream with full Suspense support
+  </Card>
+  <Card title="renderToReadableStream" icon="bolt" href="/api/server/render-to-readable-stream">
+    Stream HTML using Web Streams API for edge runtimes and browsers
+  </Card>
+</CardGroup>
+
+**Benefits:**
+- Full Suspense support
+- Progressive streaming - send HTML as it becomes ready
+- Better user experience with selective hydration
+- Error boundaries work correctly
+- Recommended for all new projects
+
+## Runtime Differences
+
+React server APIs work across different JavaScript runtimes:
+
+<Tabs>
+  <Tab title="Node.js">
+    ```javascript
+    import { renderToPipeableStream } from 'react-dom/server';
+    // or explicitly:
+    import { renderToPipeableStream } from 'react-dom/server.node';
+    
+    // Uses Node.js streams (Writable)
+    const { pipe } = renderToPipeableStream(<App />, {
+      onShellReady() {
+        pipe(res); // res is a Node.js response stream
+      }
+    });
+    ```
+  </Tab>
+  <Tab title="Edge Runtime">
+    ```javascript
+    import { renderToReadableStream } from 'react-dom/server';
+    // or explicitly:
+    import { renderToReadableStream } from 'react-dom/server.edge';
+    
+    // Uses Web Streams API
+    const stream = await renderToReadableStream(<App />);
+    return new Response(stream);
+    ```
+  </Tab>
+  <Tab title="Bun">
+    ```javascript
+    import { renderToReadableStream } from 'react-dom/server.bun';
+    
+    // Optimized for Bun runtime
+    const stream = await renderToReadableStream(<App />);
+    return new Response(stream);
+    ```
+  </Tab>
+</Tabs>
+
+The correct export is automatically selected based on your environment:
+
+- **`react-dom/server.node`** - Node.js environments (default)
+- **`react-dom/server.edge`** - Edge runtimes (Vercel Edge, Cloudflare Workers)
+- **`react-dom/server.bun`** - Bun runtime
+- **`react-dom/server.browser`** - Browser environments (rare)
+
+## SSR vs SSG
+
+### Server-Side Rendering (SSR)
+
+Render HTML on-demand for each request:
+
+```javascript
+app.get('*', async (req, res) => {
+  const stream = await renderToReadableStream(<App url={req.url} />);
+  stream.pipeTo(res);
+});
+```
+
+**When to use:**
+- Content changes frequently
+- Personalized content per user
+- Real-time data
+
+### Static Site Generation (SSG)
+
+Pre-render HTML at build time:
+
+```javascript
+import { renderToStaticMarkup } from 'react-dom/server';
+
+const html = renderToStaticMarkup(<App />);
+fs.writeFileSync('index.html', html);
+```
+
+**When to use:**
+- Content rarely changes
+- Same content for all users
+- Maximum performance
+
+## Streaming Architecture
+
+Streaming allows you to send HTML to the client in chunks as it becomes ready:
+
+```
+┌─────────────────────────────────────────┐
+│  Server renders React tree              │
+│                                         │
+│  ┌─────────┐  ┌─────────┐  ┌─────────┐│
+│  │ Shell   │  │ Content │  │ Suspense││
+│  │ (ready) │→ │ (ready) │→ │ (wait)  ││
+│  └────┬────┘  └────┬────┘  └────┬────┘│
+│       │            │             │     │
+└───────┼────────────┼─────────────┼─────┘
+        ↓            ↓             ↓
+   Send HTML    Send HTML    Send when ready
+   immediately   chunk        with inline <script>
+```
+
+### Shell vs Content
+
+- **Shell**: Initial UI structure, sent on `onShellReady`
+- **Content**: Everything else, streamed progressively
+- **Suspense boundaries**: Wait for async data, stream when ready
+
+```jsx
+<Layout> {/* Shell - sent immediately */}
+  <Suspense fallback={<Spinner />}>
+    <AsyncContent /> {/* Streamed when ready */}
+  </Suspense>
+</Layout>
+```
+
+## Server Components
+
+React Server Components let you write components that run only on the server:
+
+```jsx
+// This component runs ONLY on the server
+async function UserProfile({ userId }) {
+  // Direct database access - no API needed
+  const user = await db.users.findById(userId);
+  
+  return <div>{user.name}</div>;
+}
+```
+
+See [Server Components](/api/server/server-components) for detailed documentation.
+
+## Error Handling
+
+All streaming APIs support error handling callbacks:
+
+```javascript
+const stream = await renderToReadableStream(<App />, {
+  onError(error, errorInfo) {
+    console.error('Rendering error:', error);
+    logErrorToService(error, errorInfo);
+    
+    // Return a digest to send to client
+    return errorInfo.digest;
+  }
+});
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use streaming APIs for new projects">
+    `renderToPipeableStream` and `renderToReadableStream` provide better performance and user experience than legacy `renderToString`.
+  </Accordion>
+  
+  <Accordion title="Implement proper error boundaries">
+    Use Error Boundaries to catch and handle errors gracefully during server rendering.
+  </Accordion>
+  
+  <Accordion title="Optimize Suspense boundaries">
+    Place Suspense boundaries strategically to balance initial content delivery with progressive loading.
+  </Accordion>
+  
+  <Accordion title="Use onShellReady for interactive content">
+    Start streaming in `onShellReady` to minimize time to first byte for users.
+  </Accordion>
+  
+  <Accordion title="Consider using onAllReady for crawlers">
+    For SEO purposes, wait for `onAllReady` when serving content to search engine crawlers.
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="renderToString" icon="file-code" href="/api/server/render-to-string">
+    Learn about synchronous HTML generation
+  </Card>
+  <Card title="renderToPipeableStream" icon="stream" href="/api/server/render-to-pipe">
+    Implement streaming SSR in Node.js
+  </Card>
+  <Card title="renderToReadableStream" icon="bolt" href="/api/server/render-to-readable-stream">
+    Use Web Streams API for edge runtimes
+  </Card>
+  <Card title="Server Components" icon="server" href="/api/server/server-components">
+    Build with React Server Components
+  </Card>
+</CardGroup>

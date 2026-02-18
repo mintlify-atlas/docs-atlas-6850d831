@@ -1,0 +1,753 @@
+---
+title: React Server Components
+description: Build with React Server Components - async components that run only on the server with direct data access
+---
+
+# React Server Components
+
+React Server Components (RSC) let you write components that run exclusively on the server. They can directly access databases, file systems, and other server-only resources without exposing them to the client.
+
+<Info>
+  Server Components are part of the React Server architecture and work seamlessly with streaming server rendering APIs like `renderToPipeableStream` and `renderToReadableStream`.
+</Info>
+
+## What are Server Components?
+
+Server Components are React components that:
+
+- **Run only on the server** - Never sent to the client as JavaScript
+- **Can be async** - Use `async/await` directly in the component
+- **Access server resources** - Databases, file systems, APIs without exposing credentials
+- **Zero bundle size** - Don't add to client JavaScript bundle
+- **Automatic code splitting** - Client components are automatically split
+
+```jsx
+// This component runs ONLY on the server
+async function BlogPost({ id }) {
+  // Direct database access - no API needed!
+  const post = await db.posts.findById(id);
+  const comments = await db.comments.findByPostId(id);
+  
+  return (
+    <article>
+      <h1>{post.title}</h1>
+      <p>{post.content}</p>
+      <Comments data={comments} />
+    </article>
+  );
+}
+```
+
+## Server vs Client Components
+
+<Tabs>
+  <Tab title="Server Component">
+    ```jsx
+    // No 'use client' directive = Server Component by default
+    
+    async function UserProfile({ userId }) {
+      // Runs on server - can access database
+      const user = await db.users.findById(userId);
+      const posts = await db.posts.findByUserId(userId);
+      
+      return (
+        <div>
+          <h1>{user.name}</h1>
+          <p>Email: {user.email}</p>
+          <PostList posts={posts} />
+        </div>
+      );
+    }
+    
+    // Characteristics:
+    // ✓ Can be async
+    // ✓ Can access server resources
+    // ✓ Zero client bundle size
+    // ✗ No useState, useEffect, or browser APIs
+    // ✗ No event handlers
+    ```
+  </Tab>
+  <Tab title="Client Component">
+    ```jsx
+    'use client'; // Directive marks as Client Component
+    
+    import { useState } from 'react';
+    
+    function InteractiveButton() {
+      const [count, setCount] = useState(0);
+      
+      return (
+        <button onClick={() => setCount(count + 1)}>
+          Clicked {count} times
+        </button>
+      );
+    }
+    
+    // Characteristics:
+    // ✓ Can use hooks (useState, useEffect, etc.)
+    // ✓ Can have event handlers
+    // ✓ Can access browser APIs
+    // ✗ Cannot be async
+    // ✗ Cannot access server resources
+    // ✗ Adds to client bundle
+    ```
+  </Tab>
+</Tabs>
+
+### Component comparison table
+
+| Feature | Server Component | Client Component |
+|---------|-----------------|------------------|
+| Default | ✅ Yes (no directive) | ❌ Needs `'use client'` |
+| Async/await | ✅ Yes | ❌ No |
+| Server resources | ✅ Yes (DB, FS, etc.) | ❌ No |
+| React hooks | ❌ No | ✅ Yes |
+| Event handlers | ❌ No | ✅ Yes |
+| Browser APIs | ❌ No | ✅ Yes |
+| Bundle size | ✅ Zero | ⚠️ Adds to bundle |
+| Re-renders | ❌ Server only | ✅ Yes |
+
+## Basic Usage
+
+### Creating a Server Component
+
+Server Components don't need any special directive - they're the default:
+
+```jsx
+// app/page.js - Server Component by default
+
+async function HomePage() {
+  // Direct data fetching on the server
+  const posts = await fetchPosts();
+  
+  return (
+    <main>
+      <h1>Blog Posts</h1>
+      <ul>
+        {posts.map(post => (
+          <li key={post.id}>
+            <a href={`/posts/${post.id}`}>{post.title}</a>
+          </li>
+        ))}
+      </ul>
+    </main>
+  );
+}
+
+export default HomePage;
+```
+
+### Marking Client Components
+
+Use `'use client'` directive at the top of files that need client-side features:
+
+```jsx
+// components/Counter.js
+'use client';
+
+import { useState } from 'react';
+
+export function Counter() {
+  const [count, setCount] = useState(0);
+  
+  return (
+    <button onClick={() => setCount(count + 1)}>
+      Count: {count}
+    </button>
+  );
+}
+```
+
+### Composing Server and Client Components
+
+Server Components can import and render Client Components:
+
+```jsx
+// app/page.js - Server Component
+import { Counter } from './Counter'; // Client Component
+
+async function HomePage() {
+  const data = await fetchData();
+  
+  return (
+    <div>
+      <h1>{data.title}</h1>
+      {/* Server Component rendering Client Component */}
+      <Counter />
+    </div>
+  );
+}
+```
+
+<Warning>
+  Client Components **cannot** import Server Components. Server Components must be passed as children or props.
+</Warning>
+
+## Data Fetching
+
+### Direct database access
+
+```jsx
+import { db } from '@/lib/database';
+
+async function ProductList({ category }) {
+  // Direct database query - no API needed!
+  const products = await db.query(
+    'SELECT * FROM products WHERE category = $1',
+    [category]
+  );
+  
+  return (
+    <div className="grid">
+      {products.map(product => (
+        <ProductCard key={product.id} product={product} />
+      ))}
+    </div>
+  );
+}
+```
+
+### File system access
+
+```jsx
+import fs from 'fs/promises';
+import path from 'path';
+
+async function MarkdownContent({ slug }) {
+  // Read files directly from the file system
+  const filePath = path.join(process.cwd(), 'content', `${slug}.md`);
+  const content = await fs.readFile(filePath, 'utf-8');
+  const html = await markdownToHtml(content);
+  
+  return (
+    <article dangerouslySetInnerHTML={{ __html: html }} />
+  );
+}
+```
+
+### External API calls
+
+```jsx
+async function WeatherWidget({ city }) {
+  // API keys stay on the server - never exposed to client
+  const response = await fetch(
+    `https://api.weather.com/v1/current?city=${city}&key=${process.env.WEATHER_API_KEY}`
+  );
+  const weather = await response.json();
+  
+  return (
+    <div>
+      <h3>Weather in {city}</h3>
+      <p>{weather.temperature}°F</p>
+      <p>{weather.conditions}</p>
+    </div>
+  );
+}
+```
+
+### Parallel data fetching
+
+```jsx
+async function UserDashboard({ userId }) {
+  // Fetch multiple resources in parallel
+  const [user, posts, notifications] = await Promise.all([
+    db.users.findById(userId),
+    db.posts.findByUserId(userId),
+    db.notifications.findByUserId(userId),
+  ]);
+  
+  return (
+    <div>
+      <UserProfile user={user} />
+      <PostList posts={posts} />
+      <NotificationsList notifications={notifications} />
+    </div>
+  );
+}
+```
+
+## Streaming with Suspense
+
+Server Components work seamlessly with Suspense for progressive rendering:
+
+```jsx
+import { Suspense } from 'react';
+
+// Fast component - part of the shell
+function Header() {
+  return <header><h1>My App</h1></header>;
+}
+
+// Slow async component
+async function SlowData() {
+  const data = await fetchSlowData(); // Takes 3 seconds
+  return <div>{data.content}</div>;
+}
+
+// Root component
+function Page() {
+  return (
+    <>
+      {/* Sent immediately */}
+      <Header />
+      
+      {/* Streamed when ready */}
+      <Suspense fallback={<div>Loading...</div>}>
+        <SlowData />
+      </Suspense>
+    </>
+  );
+}
+```
+
+### Multiple Suspense boundaries
+
+```jsx
+import { Suspense } from 'react';
+
+function Dashboard() {
+  return (
+    <div>
+      <h1>Dashboard</h1>
+      
+      {/* These load independently and stream as they become ready */}
+      <Suspense fallback={<Skeleton />}>
+        <RecentPosts />
+      </Suspense>
+      
+      <Suspense fallback={<Skeleton />}>
+        <Analytics />
+      </Suspense>
+      
+      <Suspense fallback={<Skeleton />}>
+        <UserActivity />
+      </Suspense>
+    </div>
+  );
+}
+
+// Each component fetches independently
+async function RecentPosts() {
+  const posts = await db.posts.findRecent();
+  return <PostList posts={posts} />;
+}
+
+async function Analytics() {
+  const stats = await db.analytics.getDailyStats();
+  return <StatsDisplay stats={stats} />;
+}
+
+async function UserActivity() {
+  const activity = await db.activity.getRecent();
+  return <ActivityFeed activity={activity} />;
+}
+```
+
+## Server Actions
+
+Server Actions are async functions that run on the server and can be called from Client Components:
+
+### Defining Server Actions
+
+```jsx
+'use server';
+
+// This entire file contains server actions
+
+export async function createPost(formData) {
+  const title = formData.get('title');
+  const content = formData.get('content');
+  
+  // Direct database access
+  const post = await db.posts.create({
+    title,
+    content,
+    createdAt: new Date(),
+  });
+  
+  // Revalidate cached data
+  revalidatePath('/posts');
+  
+  return { success: true, postId: post.id };
+}
+
+export async function deletePost(postId) {
+  await db.posts.delete(postId);
+  revalidatePath('/posts');
+}
+```
+
+### Using Server Actions in forms
+
+```jsx
+'use client';
+
+import { createPost } from './actions';
+import { useFormStatus } from 'react-dom';
+
+function SubmitButton() {
+  const { pending } = useFormStatus();
+  
+  return (
+    <button type="submit" disabled={pending}>
+      {pending ? 'Creating...' : 'Create Post'}
+    </button>
+  );
+}
+
+export function CreatePostForm() {
+  return (
+    <form action={createPost}>
+      <input name="title" placeholder="Title" required />
+      <textarea name="content" placeholder="Content" required />
+      <SubmitButton />
+    </form>
+  );
+}
+```
+
+### Programmatic Server Actions
+
+```jsx
+'use client';
+
+import { deletePost } from './actions';
+import { useTransition } from 'react';
+
+export function DeleteButton({ postId }) {
+  const [isPending, startTransition] = useTransition();
+  
+  const handleDelete = () => {
+    startTransition(async () => {
+      await deletePost(postId);
+    });
+  };
+  
+  return (
+    <button onClick={handleDelete} disabled={isPending}>
+      {isPending ? 'Deleting...' : 'Delete'}
+    </button>
+  );
+}
+```
+
+### Server Actions with validation
+
+```jsx
+'use server';
+
+import { z } from 'zod';
+
+const postSchema = z.object({
+  title: z.string().min(1).max(200),
+  content: z.string().min(1).max(10000),
+  published: z.boolean().default(false),
+});
+
+export async function createPost(formData) {
+  // Validate input
+  const validatedData = postSchema.parse({
+    title: formData.get('title'),
+    content: formData.get('content'),
+    published: formData.get('published') === 'on',
+  });
+  
+  // Create post
+  const post = await db.posts.create(validatedData);
+  
+  return { success: true, post };
+}
+```
+
+## Patterns and Best Practices
+
+### Passing data from Server to Client Components
+
+```jsx
+// Server Component
+async function Page() {
+  const data = await fetchData();
+  
+  // Pass data as props to Client Component
+  return <ClientComponent data={data} />;
+}
+
+// Client Component
+'use client';
+
+export function ClientComponent({ data }) {
+  const [selected, setSelected] = useState(null);
+  
+  return (
+    <div>
+      {data.map(item => (
+        <button key={item.id} onClick={() => setSelected(item)}>
+          {item.name}
+        </button>
+      ))}
+      {selected && <Details item={selected} />}
+    </div>
+  );
+}
+```
+
+### Composing Client and Server Components
+
+```jsx
+// Server Component can pass Server Components as children to Client Components
+
+// app/layout.js - Server Component
+import { ClientLayout } from './ClientLayout';
+import { Sidebar } from './Sidebar'; // Server Component
+
+export default async function Layout({ children }) {
+  const nav = await fetchNavigation();
+  
+  return (
+    <ClientLayout
+      sidebar={<Sidebar navigation={nav} />}
+    >
+      {children}
+    </ClientLayout>
+  );
+}
+
+// ClientLayout.js - Client Component
+'use client';
+
+export function ClientLayout({ sidebar, children }) {
+  const [isOpen, setIsOpen] = useState(true);
+  
+  return (
+    <div>
+      <button onClick={() => setIsOpen(!isOpen)}>Toggle</button>
+      {isOpen && sidebar}
+      <main>{children}</main>
+    </div>
+  );
+}
+```
+
+### Keeping Server-only code secure
+
+```jsx
+// lib/server-only-utils.js
+import 'server-only'; // Ensures this module can only be imported on server
+
+export async function getSecretData() {
+  // This code will error if accidentally imported in a Client Component
+  const apiKey = process.env.SECRET_API_KEY;
+  // ...
+}
+```
+
+### Sharing code between Server and Client
+
+```jsx
+// utils/shared.js - No 'use client' or 'use server'
+// Can be imported by both Server and Client Components
+
+export function formatDate(date) {
+  return new Intl.DateTimeFormat('en-US').format(date);
+}
+
+export function formatCurrency(amount) {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+  }).format(amount);
+}
+```
+
+## Rendering Server Components
+
+### With renderToPipeableStream (Node.js)
+
+```javascript
+import { renderToPipeableStream } from 'react-dom/server';
+import App from './App'; // Can include Server Components
+
+app.get('/', (req, res) => {
+  const { pipe } = renderToPipeableStream(<App />, {
+    bootstrapScripts: ['/client.js'],
+    onShellReady() {
+      res.setHeader('Content-Type', 'text/html');
+      pipe(res);
+    },
+  });
+});
+```
+
+### With renderToReadableStream (Edge)
+
+```javascript
+import { renderToReadableStream } from 'react-dom/server';
+import App from './App';
+
+export default async function handler(request) {
+  const stream = await renderToReadableStream(<App />, {
+    bootstrapScripts: ['/client.js'],
+  });
+  
+  return new Response(stream, {
+    headers: { 'Content-Type': 'text/html' },
+  });
+}
+```
+
+## Common Patterns
+
+### Loading states
+
+```jsx
+import { Suspense } from 'react';
+
+function Page() {
+  return (
+    <Suspense fallback={<LoadingSkeleton />}>
+      <AsyncContent />
+    </Suspense>
+  );
+}
+
+function LoadingSkeleton() {
+  return (
+    <div className="animate-pulse">
+      <div className="h-4 bg-gray-200 rounded w-3/4 mb-4" />
+      <div className="h-4 bg-gray-200 rounded w-1/2" />
+    </div>
+  );
+}
+```
+
+### Error boundaries
+
+```jsx
+'use client';
+
+import { Component } from 'react';
+
+export class ErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  
+  static getDerivedStateFromError(error) {
+    return { hasError: true };
+  }
+  
+  componentDidCatch(error, errorInfo) {
+    console.error('Error:', error, errorInfo);
+  }
+  
+  render() {
+    if (this.state.hasError) {
+      return this.props.fallback;
+    }
+    
+    return this.props.children;
+  }
+}
+
+// Usage
+function Page() {
+  return (
+    <ErrorBoundary fallback={<ErrorMessage />}>
+      <Suspense fallback={<Loading />}>
+        <AsyncContent />
+      </Suspense>
+    </ErrorBoundary>
+  );
+}
+```
+
+### Data caching
+
+```jsx
+import { cache } from 'react';
+
+// Cache function results for the duration of a request
+const getUser = cache(async (id) => {
+  return await db.users.findById(id);
+});
+
+async function UserProfile({ userId }) {
+  const user = await getUser(userId);
+  return <div>{user.name}</div>;
+}
+
+async function UserPosts({ userId }) {
+  const user = await getUser(userId); // Uses cached result
+  const posts = await db.posts.findByUserId(userId);
+  return <PostList posts={posts} author={user.name} />;
+}
+```
+
+## Common Issues
+
+<AccordionGroup>
+  <Accordion title="Cannot use hooks in Server Components">
+    Server Components cannot use hooks like `useState`, `useEffect`, or `useContext`:
+    
+    ```jsx
+    // ❌ Error: Cannot use hooks in Server Component
+    async function ServerComponent() {
+      const [count, setCount] = useState(0);
+      return <div>{count}</div>;
+    }
+    
+    // ✅ Move to Client Component
+    'use client';
+    function ClientComponent() {
+      const [count, setCount] = useState(0);
+      return <div>{count}</div>;
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Cannot pass functions to Client Components">
+    Functions (including event handlers) cannot be serialized:
+    
+    ```jsx
+    // ❌ Error: Functions cannot be passed to Client Components
+    async function ServerComponent() {
+      const handleClick = () => console.log('clicked');
+      return <ClientButton onClick={handleClick} />;
+    }
+    
+    // ✅ Define event handlers in Client Components
+    'use client';
+    function ClientButton() {
+      const handleClick = () => console.log('clicked');
+      return <button onClick={handleClick}>Click</button>;
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Cannot import Server Components in Client Components">
+    Client Components cannot import Server Components:
+    
+    ```jsx
+    // ❌ Error: Cannot import Server Component
+    'use client';
+    import { ServerComponent } from './ServerComponent';
+    
+    // ✅ Pass as children or props
+    function Layout({ children }) {
+      return <div>{children}</div>;
+    }
+    
+    // In parent Server Component:
+    <Layout>
+      <ServerComponent />
+    </Layout>
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## See Also
+
+- [`renderToPipeableStream`](/api/server/render-to-pipe) - Render Server Components with Node.js streams
+- [`renderToReadableStream`](/api/server/render-to-readable-stream) - Render Server Components with Web Streams
+- [Server Rendering Overview](/api/server/overview) - Architecture and concepts

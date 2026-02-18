@@ -1,0 +1,492 @@
+---
+title: Component Lifecycle
+description: Understanding component lifecycle phases and how to respond to them
+icon: rotate
+---
+
+Every React component goes through a lifecycle: it's created (mounted), updated, and eventually removed (unmounted). Understanding the component lifecycle helps you manage side effects, clean up resources, and optimize performance.
+
+## Lifecycle Phases
+
+A component's lifecycle can be divided into three main phases:
+
+1. **Mounting**: Component is created and inserted into the DOM
+2. **Updating**: Component re-renders due to changes in props or state
+3. **Unmounting**: Component is removed from the DOM
+
+## Lifecycle in Function Components
+
+Function components use Hooks to handle lifecycle events. The primary Hook for lifecycle management is `useEffect`.
+
+### Mounting and Updating
+
+```jsx
+import { useState, useEffect } from 'react';
+
+function UserProfile({ userId }) {
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  // Runs after mount and whenever userId changes
+  useEffect(() => {
+    setLoading(true);
+    
+    fetch(`/api/users/${userId}`)
+      .then(res => res.json())
+      .then(data => {
+        setUser(data);
+        setLoading(false);
+      });
+  }, [userId]); // Dependency array
+
+  if (loading) return <p>Loading...</p>;
+  return <div>{user.name}</div>;
+}
+```
+
+### Effect Dependencies
+
+The dependency array controls when the effect runs:
+
+```jsx
+// Runs after every render
+useEffect(() => {
+  console.log('Rendered');
+});
+
+// Runs only once after mount
+useEffect(() => {
+  console.log('Component mounted');
+}, []);
+
+// Runs after mount and when dependencies change
+useEffect(() => {
+  console.log('count or name changed');
+}, [count, name]);
+```
+
+<Warning>
+  **Rules of Hooks**: The `useEffect` Hook must be called at the top level of your component. Don't call it inside conditions, loops, or nested functions. React relies on the order of Hook calls to track state correctly.
+</Warning>
+
+### Cleanup (Unmounting)
+
+Return a cleanup function from `useEffect` to run code when the component unmounts or before the effect runs again:
+
+```jsx
+function Timer() {
+  const [seconds, setSeconds] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setSeconds(s => s + 1);
+    }, 1000);
+
+    // Cleanup function
+    return () => {
+      clearInterval(interval);
+    };
+  }, []); // Empty array means this runs once on mount
+
+  return <div>Seconds: {seconds}</div>;
+}
+```
+
+Common cleanup scenarios:
+
+```jsx
+useEffect(() => {
+  // Event listener
+  function handleResize() {
+    setWindowWidth(window.innerWidth);
+  }
+  
+  window.addEventListener('resize', handleResize);
+  
+  return () => {
+    window.removeEventListener('resize', handleResize);
+  };
+}, []);
+
+useEffect(() => {
+  // WebSocket connection
+  const ws = new WebSocket('ws://localhost:8080');
+  
+  ws.onmessage = (event) => {
+    setMessages(msgs => [...msgs, event.data]);
+  };
+  
+  return () => {
+    ws.close();
+  };
+}, []);
+
+useEffect(() => {
+  // Async operation that can be cancelled
+  const controller = new AbortController();
+  
+  fetch('/api/data', { signal: controller.signal })
+    .then(res => res.json())
+    .then(data => setData(data))
+    .catch(err => {
+      if (err.name !== 'AbortError') {
+        console.error(err);
+      }
+    });
+  
+  return () => {
+    controller.abort();
+  };
+}, []);
+```
+
+### useLayoutEffect
+
+`useLayoutEffect` is similar to `useEffect` but fires synchronously after all DOM mutations, before the browser paints:
+
+```jsx
+import { useLayoutEffect, useRef } from 'react';
+
+function Tooltip() {
+  const ref = useRef(null);
+  
+  useLayoutEffect(() => {
+    // Measure DOM and update position before paint
+    const { height } = ref.current.getBoundingClientRect();
+    ref.current.style.marginTop = `-${height}px`;
+  }, []);
+  
+  return <div ref={ref}>Tooltip content</div>;
+}
+```
+
+<Note>
+  **When to use useLayoutEffect**: Use it when you need to read layout information (like scroll position or element size) and synchronously make changes before the browser paints. For most cases, `useEffect` is preferred.
+</Note>
+
+### useInsertionEffect
+
+`useInsertionEffect` fires before all DOM mutations. It's primarily used by CSS-in-JS libraries to inject styles:
+
+```jsx
+import { useInsertionEffect } from 'react';
+
+function useCSS(rule) {
+  useInsertionEffect(() => {
+    // Inject CSS before DOM mutations
+    const style = document.createElement('style');
+    style.textContent = rule;
+    document.head.appendChild(style);
+    
+    return () => {
+      document.head.removeChild(style);
+    };
+  }, [rule]);
+}
+```
+
+<Tip>
+  According to React's source code in `ReactHooks.js`, the effect timing order is:
+  1. `useInsertionEffect` - Before DOM mutations
+  2. `useLayoutEffect` - After DOM mutations, before paint
+  3. `useEffect` - After paint
+</Tip>
+
+## Lifecycle in Class Components
+
+Class components have explicit lifecycle methods. While function components with Hooks are now preferred, understanding class lifecycle methods is useful for maintaining existing code.
+
+### Mounting
+
+Called when a component is created and inserted into the DOM:
+
+```jsx
+import { Component } from 'react';
+
+class UserProfile extends Component {
+  constructor(props) {
+    super(props);
+    // Initialize state
+    this.state = {
+      user: null,
+      loading: true
+    };
+  }
+
+  componentDidMount() {
+    // Called after component is mounted
+    // Perfect for: API calls, subscriptions, timers
+    fetch(`/api/users/${this.props.userId}`)
+      .then(res => res.json())
+      .then(user => {
+        this.setState({ user, loading: false });
+      });
+  }
+
+  render() {
+    if (this.state.loading) return <p>Loading...</p>;
+    return <div>{this.state.user.name}</div>;
+  }
+}
+```
+
+### Updating
+
+Called when props or state change:
+
+```jsx
+class UserProfile extends Component {
+  componentDidUpdate(prevProps, prevState) {
+    // Called after component updates
+    // Compare previous and current props/state
+    if (this.props.userId !== prevProps.userId) {
+      this.loadUser(this.props.userId);
+    }
+  }
+
+  shouldComponentUpdate(nextProps, nextState) {
+    // Return false to prevent unnecessary re-renders
+    // PureComponent does this automatically with shallow comparison
+    return (
+      nextProps.userId !== this.props.userId ||
+      nextState.user !== this.state.user
+    );
+  }
+
+  render() {
+    return <div>{this.state.user?.name}</div>;
+  }
+}
+```
+
+<Note>
+  According to the React source code in `ReactBaseClasses.js`, `forceUpdate()` will not invoke `shouldComponentUpdate`, but it will invoke `componentWillUpdate` and `componentDidUpdate`.
+</Note>
+
+### Unmounting
+
+Called when a component is removed from the DOM:
+
+```jsx
+class Timer extends Component {
+  componentDidMount() {
+    this.interval = setInterval(() => {
+      this.setState({ seconds: this.state.seconds + 1 });
+    }, 1000);
+  }
+
+  componentWillUnmount() {
+    // Clean up before component is unmounted
+    // Cancel timers, subscriptions, network requests
+    clearInterval(this.interval);
+  }
+
+  render() {
+    return <div>Seconds: {this.state.seconds}</div>;
+  }
+}
+```
+
+### Error Boundaries
+
+Class components can catch errors in child components using error boundaries:
+
+```jsx
+class ErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    // Update state so next render shows fallback UI
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    // Log error to error reporting service
+    console.error('Error caught:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return <h1>Something went wrong.</h1>;
+    }
+
+    return this.props.children;
+  }
+}
+
+// Usage
+<ErrorBoundary>
+  <App />
+</ErrorBoundary>
+```
+
+<Warning>
+  Error boundaries do **not** catch errors in:
+  - Event handlers (use try/catch instead)
+  - Asynchronous code (setTimeout, promises)
+  - Server-side rendering
+  - Errors thrown in the error boundary itself
+</Warning>
+
+## Function vs Class Lifecycle Comparison
+
+<Tabs>
+  <Tab title="Function Component">
+    ```jsx
+import { useState, useEffect } from 'react';
+
+function DataFetcher({ id }) {
+  const [data, setData] = useState(null);
+
+  // componentDidMount + componentDidUpdate
+  useEffect(() => {
+    const controller = new AbortController();
+    
+    fetch(`/api/data/${id}`, { signal: controller.signal })
+      .then(res => res.json())
+      .then(setData);
+
+    // componentWillUnmount
+    return () => controller.abort();
+  }, [id]);
+
+  return <div>{data?.name}</div>;
+}
+    ```
+  </Tab>
+  
+  <Tab title="Class Component">
+    ```jsx
+import { Component } from 'react';
+
+class DataFetcher extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { data: null };
+    this.controller = null;
+  }
+
+  componentDidMount() {
+    this.loadData();
+  }
+
+  componentDidUpdate(prevProps) {
+    if (prevProps.id !== this.props.id) {
+      this.loadData();
+    }
+  }
+
+  componentWillUnmount() {
+    if (this.controller) {
+      this.controller.abort();
+    }
+  }
+
+  loadData() {
+    this.controller = new AbortController();
+    
+    fetch(`/api/data/${this.props.id}`, {
+      signal: this.controller.signal
+    })
+      .then(res => res.json())
+      .then(data => this.setState({ data }));
+  }
+
+  render() {
+    return <div>{this.state.data?.name}</div>;
+  }
+}
+    ```
+  </Tab>
+</Tabs>
+
+## Common Lifecycle Patterns
+
+### Fetching Data
+
+```jsx
+function UserList() {
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    fetch('/api/users')
+      .then(res => res.json())
+      .then(data => {
+        setUsers(data);
+        setLoading(false);
+      })
+      .catch(err => {
+        setError(err);
+        setLoading(false);
+      });
+  }, []);
+
+  if (loading) return <p>Loading...</p>;
+  if (error) return <p>Error: {error.message}</p>;
+  return <ul>{users.map(u => <li key={u.id}>{u.name}</li>)}</ul>;
+}
+```
+
+### Subscribing to External Data
+
+```jsx
+function ChatRoom({ roomId }) {
+  const [messages, setMessages] = useState([]);
+
+  useEffect(() => {
+    const subscription = chatAPI.subscribe(roomId, (message) => {
+      setMessages(msgs => [...msgs, message]);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [roomId]);
+
+  return (
+    <div>
+      {messages.map((msg, i) => <p key={i}>{msg}</p>)}
+    </div>
+  );
+}
+```
+
+### Derived State
+
+```jsx
+function SearchResults({ query }) {
+  const [items, setItems] = useState([]);
+  const [filteredItems, setFilteredItems] = useState([]);
+
+  // Instead of using state for derived values, calculate them during render
+  const filteredItems = items.filter(item =>
+    item.name.toLowerCase().includes(query.toLowerCase())
+  );
+
+  return (
+    <ul>
+      {filteredItems.map(item => <li key={item.id}>{item.name}</li>)}
+    </ul>
+  );
+}
+```
+
+<Tip>
+  If a value can be calculated from props or state, don't store it in state. Calculate it during render instead. This prevents synchronization bugs.
+</Tip>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Hooks Overview" icon="fish" href="/concepts/hooks-overview">
+    Explore all available React Hooks
+  </Card>
+  <Card title="Rendering" icon="paintbrush" href="/concepts/rendering">
+    Learn how React renders and updates the DOM
+  </Card>
+</CardGroup>

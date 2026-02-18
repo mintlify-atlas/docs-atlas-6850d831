@@ -1,0 +1,407 @@
+---
+title: 'React Profiler Component'
+description: 'Measure rendering performance of React components programmatically'
+---
+
+# React Profiler Component
+
+The `Profiler` component measures the performance of specific parts of your React application. It helps identify performance bottlenecks by tracking how long components take to render.
+
+## Basic Usage
+
+```jsx
+import { Profiler } from 'react';
+
+function App() {
+  return (
+    <Profiler id="navigation" onRender={onRenderCallback}>
+      <Navigation />
+    </Profiler>
+  );
+}
+
+function onRenderCallback(
+  id,                 // The "id" prop of the Profiler tree that committed
+  phase,              // "mount" or "update"
+  actualDuration,     // Time spent rendering the committed update
+  baseDuration,       // Estimated time to render without memoization
+  startTime,          // When React began rendering this update
+  commitTime          // When React committed this update
+) {
+  console.log(`${id} rendered in ${actualDuration}ms`);
+}
+```
+
+## Implementation Details
+
+The `Profiler` uses the `REACT_PROFILER_TYPE` symbol (see `ReactClient.js:13`) to identify profiler components in the React tree.
+
+```javascript
+// From ReactClient.js:103
+REACT_PROFILER_TYPE as Profiler
+```
+
+## The onRender Callback
+
+The `onRender` callback receives six parameters providing detailed timing information:
+
+### Parameters
+
+#### `id`: string
+
+The unique identifier of the Profiler tree that committed. Use this to identify which part of your app was measured if you have multiple Profilers.
+
+```jsx
+<Profiler id="sidebar" onRender={callback}>
+  <Sidebar />
+</Profiler>
+<Profiler id="main-content" onRender={callback}>
+  <MainContent />
+</Profiler>
+```
+
+#### `phase`: "mount" | "update"
+
+Indicates whether the component tree was mounted for the first time or re-rendered due to a prop, state, or hook change.
+
+```javascript
+function onRender(id, phase, actualDuration) {
+  if (phase === 'mount') {
+    console.log(`${id} mounted in ${actualDuration}ms`);
+  } else {
+    console.log(`${id} updated in ${actualDuration}ms`);
+  }
+}
+```
+
+#### `actualDuration`: number
+
+Time in milliseconds spent rendering the Profiler and its descendants for the current update. This indicates how well the subtree uses memoization.
+
+**Lower is better.** A high value might indicate:
+- Components aren't memoized when they should be
+- Expensive calculations aren't using `useMemo`
+- Too many components re-rendering unnecessarily
+
+#### `baseDuration`: number
+
+Time in milliseconds estimating how long it would take to render the entire Profiler subtree without any optimizations (without `React.memo`, `useMemo`, etc.).
+
+**Comparison**:
+- If `actualDuration` is much lower than `baseDuration`, memoization is working well
+- If they're similar, there's little benefit from current memoization
+
+```javascript
+function onRender(id, phase, actualDuration, baseDuration) {
+  const improvement = ((baseDuration - actualDuration) / baseDuration * 100).toFixed(1);
+  console.log(`Memoization saved ${improvement}% render time`);
+}
+```
+
+#### `startTime`: number
+
+Timestamp when React began rendering this update. Can be used to group renders from the same commit.
+
+#### `commitTime`: number
+
+Timestamp when React committed this update. Shared among all Profilers in a commit, enabling grouping.
+
+```javascript
+const rendersByCommit = new Map();
+
+function onRender(id, phase, actualDuration, baseDuration, startTime, commitTime) {
+  if (!rendersByCommit.has(commitTime)) {
+    rendersByCommit.set(commitTime, []);
+  }
+  
+  rendersByCommit.get(commitTime).push({
+    id,
+    phase,
+    actualDuration
+  });
+}
+```
+
+## Real-World Usage Patterns
+
+### Tracking Component Performance
+
+From `ReactProfiler-test.internal.js:287`, here's how to track mount and update performance:
+
+```jsx
+function App() {
+  const [count, setCount] = useState(0);
+  
+  const handleRender = useCallback((id, phase, actualDuration) => {
+    // Send to analytics service
+    analytics.track('component_render', {
+      component: id,
+      phase,
+      duration: actualDuration
+    });
+  }, []);
+  
+  return (
+    <Profiler id="app" onRender={handleRender}>
+      <ExpensiveComponent count={count} />
+      <button onClick={() => setCount(c => c + 1)}>
+        Increment
+      </button>
+    </Profiler>
+  );
+}
+```
+
+<Tip>
+The `onRender` callback itself should be lightweight. Avoid expensive operations inside it, as they'll add overhead to your measurements. Consider batching measurements and sending them asynchronously.
+</Tip>
+
+### Nested Profilers
+
+Profilers can be nested to measure different parts of your app separately:
+
+```jsx
+function Dashboard() {
+  return (
+    <Profiler id="dashboard" onRender={onRenderCallback}>
+      <Header />
+      
+      <Profiler id="sidebar" onRender={onRenderCallback}>
+        <Sidebar />
+      </Profiler>
+      
+      <Profiler id="content" onRender={onRenderCallback}>
+        <MainContent />
+      </Profiler>
+      
+      <Footer />
+    </Profiler>
+  );
+}
+```
+
+In this example:
+- The `dashboard` Profiler measures the entire dashboard including Header and Footer
+- The `sidebar` and `content` Profilers provide more granular measurements
+- All will have the same `commitTime` if they update together
+
+### Conditional Profiling
+
+Only profile in development or for specific users:
+
+```jsx
+function ProfiledApp({ children }) {
+  // Only profile in development
+  if (process.env.NODE_ENV === 'production') {
+    return children;
+  }
+  
+  return (
+    <Profiler id="app" onRender={onRenderCallback}>
+      {children}
+    </Profiler>
+  );
+}
+```
+
+<Warning>
+Profilers add overhead to your application. While the impact is minimal, avoid using them in production unless you're collecting performance metrics. Always profile in development mode first to identify issues.
+</Warning>
+
+### Analyzing Performance Data
+
+Collect and analyze performance data over time:
+
+```jsx
+class PerformanceMonitor {
+  constructor() {
+    this.measurements = [];
+  }
+  
+  record = (id, phase, actualDuration, baseDuration, startTime, commitTime) => {
+    this.measurements.push({
+      id,
+      phase,
+      actualDuration,
+      baseDuration,
+      startTime,
+      commitTime,
+      timestamp: Date.now()
+    });
+    
+    // Keep only last 100 measurements
+    if (this.measurements.length > 100) {
+      this.measurements.shift();
+    }
+  };
+  
+  getStats(id) {
+    const measurements = this.measurements.filter(m => m.id === id);
+    
+    if (measurements.length === 0) return null;
+    
+    const durations = measurements.map(m => m.actualDuration);
+    const sum = durations.reduce((a, b) => a + b, 0);
+    const avg = sum / durations.length;
+    const max = Math.max(...durations);
+    const min = Math.min(...durations);
+    
+    return { avg, max, min, count: measurements.length };
+  }
+}
+
+const monitor = new PerformanceMonitor();
+
+function App() {
+  return (
+    <Profiler id="app" onRender={monitor.record}>
+      <YourComponents />
+    </Profiler>
+  );
+}
+
+// Later, analyze performance
+console.log(monitor.getStats('app'));
+// { avg: 12.5, max: 45.2, min: 3.1, count: 50 }
+```
+
+## Error Handling
+
+From `ReactProfiler-test.internal.js:68`, errors thrown in `onRender` callbacks don't break the commit phase:
+
+```jsx
+function onRenderWithErrorHandling(id, phase, actualDuration) {
+  try {
+    // Your profiling logic
+    sendToAnalytics({ id, phase, actualDuration });
+  } catch (error) {
+    // Error in onRender won't break the app
+    console.error('Profiler callback error:', error);
+  }
+}
+
+function App() {
+  return (
+    <Profiler id="app" onRender={onRenderWithErrorHandling}>
+      <Components />
+    </Profiler>
+  );
+}
+```
+
+<Tip>
+Even though errors in `onRender` won't break your app, always handle errors gracefully. This ensures your profiling doesn't interfere with the user experience.
+</Tip>
+
+## Commit Phase Timing
+
+From `ReactProfiler-test.internal.js:104`, the `onRender` callback is only invoked during the commit phase, not during render:
+
+```jsx
+function App() {
+  return (
+    <Profiler id="test" onRender={(id, phase) => {
+      // This runs AFTER render completes
+      console.log(`Committed ${phase}`);
+    }}>
+      <SlowComponent />
+    </Profiler>
+  );
+}
+```
+
+This means:
+- Measurements reflect completed renders
+- Interrupted renders (via Suspense) won't trigger callbacks
+- All lifecycle methods have already run
+
+## Comparing Performance Over Time
+
+```jsx
+function PerformanceTracker() {
+  const previousRenders = useRef([]);
+  
+  const handleRender = useCallback(
+    (id, phase, actualDuration, baseDuration, startTime, commitTime) => {
+      const current = { actualDuration, baseDuration, timestamp: Date.now() };
+      previousRenders.current.push(current);
+      
+      // Keep last 10 renders
+      if (previousRenders.current.length > 10) {
+        previousRenders.current.shift();
+      }
+      
+      // Calculate trend
+      const recentAvg = previousRenders.current
+        .slice(-5)
+        .reduce((sum, r) => sum + r.actualDuration, 0) / 5;
+      
+      const olderAvg = previousRenders.current
+        .slice(0, 5)
+        .reduce((sum, r) => sum + r.actualDuration, 0) / 5;
+      
+      if (recentAvg > olderAvg * 1.5) {
+        console.warn(`Performance degradation detected in ${id}`);
+      }
+    },
+    []
+  );
+  
+  return (
+    <Profiler id="tracked-component" onRender={handleRender}>
+      <YourComponent />
+    </Profiler>
+  );
+}
+```
+
+## Production Monitoring
+
+For production environments, sample profiling data to reduce overhead:
+
+```jsx
+const SAMPLE_RATE = 0.1; // Profile 10% of renders
+
+function onRenderSampled(id, phase, actualDuration, baseDuration, startTime, commitTime) {
+  if (Math.random() < SAMPLE_RATE) {
+    sendToAnalytics({
+      id,
+      phase,
+      actualDuration,
+      baseDuration,
+      timestamp: commitTime
+    });
+  }
+}
+
+function App() {
+  return (
+    <Profiler id="app" onRender={onRenderSampled}>
+      <YourApp />
+    </Profiler>
+  );
+}
+```
+
+## Best Practices
+
+<Tip>
+- Use specific `id` props to identify different parts of your app
+- Keep `onRender` callbacks lightweight
+- Batch analytics calls to reduce network overhead
+- Use nested Profilers for granular measurements
+- Compare `actualDuration` vs `baseDuration` to measure memoization effectiveness
+</Tip>
+
+<Warning>
+- Don't use Profilers everywhere in production
+- Avoid heavy computations in `onRender` callbacks
+- Remember that profiling itself adds small overhead
+- Test with realistic data sizes and user interactions
+</Warning>
+
+## Related Resources
+
+- [Performance Optimization Strategies](/performance/optimization)
+- [Memoization Techniques](/performance/memoization)
+- [React DevTools Profiler](https://react.dev/learn/react-developer-tools#profiler)

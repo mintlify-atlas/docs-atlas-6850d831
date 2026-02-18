@@ -1,0 +1,655 @@
+---
+title: Babel Plugin
+description: Configure and integrate React Compiler Babel plugin in your build pipeline
+---
+
+# Babel Plugin
+
+The `babel-plugin-react-compiler` package is the primary interface for transforming React code with automatic memoization.
+
+## Installation
+
+<CodeGroup>
+
+```bash npm
+npm install --save-dev babel-plugin-react-compiler
+```
+
+```bash yarn
+yarn add --dev babel-plugin-react-compiler
+```
+
+```bash pnpm
+pnpm add -D babel-plugin-react-compiler
+```
+
+</CodeGroup>
+
+## Basic Setup
+
+### Babel Configuration
+
+<CodeGroup>
+
+```javascript babel.config.js
+module.exports = {
+  presets: ['@babel/preset-react'],
+  plugins: [
+    'babel-plugin-react-compiler',
+  ],
+};
+```
+
+```json .babelrc
+{
+  "presets": ["@babel/preset-react"],
+  "plugins": ["babel-plugin-react-compiler"]
+}
+```
+
+```javascript babel.config.json
+{
+  "presets": ["@babel/preset-react"],
+  "plugins": ["babel-plugin-react-compiler"]
+}
+```
+
+</CodeGroup>
+
+## Plugin Options
+
+Pass configuration options as the second element in the plugin array:
+
+```javascript babel.config.js
+module.exports = {
+  plugins: [
+    [
+      'babel-plugin-react-compiler',
+      {
+        // Options here
+        environment: {
+          validateHooksUsage: true,
+          enablePreserveExistingMemoizationGuarantees: true,
+        },
+      },
+    ],
+  ],
+};
+```
+
+### Option Structure
+
+```typescript
+interface PluginOptions {
+  // Environment configuration (compiler behavior)
+  environment?: EnvironmentConfig;
+  
+  // Logging interface
+  logger?: Logger;
+  
+  // Compilation mode
+  mode?: 'all_features' | 'no_inferred_memo';
+  
+  // Opt-in/opt-out configuration
+  sources?: (filename: string) => 'all' | 'none' | 'opt-in' | 'opt-out';
+  
+  // Enable Reanimated integration check
+  enableReanimatedCheck?: boolean;
+}
+```
+
+## Compilation Modes
+
+### Compile All Components
+
+By default, the compiler attempts to compile all components and hooks:
+
+```javascript
+module.exports = {
+  plugins: [
+    'babel-plugin-react-compiler',
+  ],
+};
+```
+
+### Opt-In Mode
+
+Only compile components with `"use memo"` directive:
+
+```javascript babel.config.js
+module.exports = {
+  plugins: [
+    [
+      'babel-plugin-react-compiler',
+      {
+        sources: (filename) => {
+          // Opt-in for specific directories
+          if (filename.includes('src/components')) {
+            return 'opt-in';
+          }
+          return 'none';
+        },
+      },
+    ],
+  ],
+};
+```
+
+Mark components for compilation:
+
+```javascript
+function MyComponent(props) {
+  'use memo';
+  // Component code
+}
+```
+
+### Opt-Out Mode
+
+Compile everything except components with `"use no memo"` directive:
+
+```javascript babel.config.js
+module.exports = {
+  plugins: [
+    [
+      'babel-plugin-react-compiler',
+      {
+        sources: (filename) => {
+          return 'opt-out';
+        },
+      },
+    ],
+  ],
+};
+```
+
+Skip specific components:
+
+```javascript
+function ProblematicComponent(props) {
+  'use no memo';
+  // Component code that shouldn't be compiled
+}
+```
+
+### File-Based Configuration
+
+```javascript babel.config.js
+module.exports = {
+  plugins: [
+    [
+      'babel-plugin-react-compiler',
+      {
+        sources: (filename) => {
+          // Don't compile test files
+          if (filename.includes('__tests__')) {
+            return 'none';
+          }
+          
+          // Opt-in for new features
+          if (filename.includes('src/features/new')) {
+            return 'opt-in';
+          }
+          
+          // Opt-out for legacy code
+          if (filename.includes('src/legacy')) {
+            return 'opt-out';
+          }
+          
+          // Compile all others
+          return 'all';
+        },
+      },
+    ],
+  ],
+};
+```
+
+## Build Tool Integration
+
+### Webpack
+
+Integrate with `babel-loader`:
+
+```javascript webpack.config.js
+module.exports = {
+  module: {
+    rules: [
+      {
+        test: /\.(js|jsx|ts|tsx)$/,
+        exclude: /node_modules/,
+        use: {
+          loader: 'babel-loader',
+          options: {
+            presets: [
+              '@babel/preset-react',
+              '@babel/preset-typescript',
+            ],
+            plugins: [
+              [
+                'babel-plugin-react-compiler',
+                {
+                  environment: {
+                    validateHooksUsage: true,
+                  },
+                },
+              ],
+            ],
+            cacheDirectory: true, // Enable caching
+          },
+        },
+      },
+    ],
+  },
+};
+```
+
+### Vite
+
+Configure with `@vitejs/plugin-react`:
+
+```javascript vite.config.js
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+
+export default defineConfig({
+  plugins: [
+    react({
+      babel: {
+        plugins: [
+          [
+            'babel-plugin-react-compiler',
+            {
+              environment: {
+                enableOptionalDependencies: true,
+              },
+            },
+          ],
+        ],
+      },
+    }),
+  ],
+});
+```
+
+### Next.js
+
+Next.js 13.5+ has built-in support:
+
+```javascript next.config.js
+const nextConfig = {
+  experimental: {
+    reactCompiler: {
+      // Compiler options
+      enablePreserveExistingMemoizationGuarantees: true,
+    },
+  },
+};
+
+module.exports = nextConfig;
+```
+
+For older versions, use custom Babel config:
+
+```javascript .babelrc
+{
+  "presets": ["next/babel"],
+  "plugins": [
+    [
+      "babel-plugin-react-compiler",
+      {
+        // options
+      }
+    ]
+  ]
+}
+```
+
+### Create React App
+
+Use `react-app-rewired` or `craco`:
+
+<CodeGroup>
+
+```javascript craco.config.js
+module.exports = {
+  babel: {
+    plugins: [
+      [
+        'babel-plugin-react-compiler',
+        {
+          environment: {
+            validateHooksUsage: true,
+          },
+        },
+      ],
+    ],
+  },
+};
+```
+
+```javascript config-overrides.js (react-app-rewired)
+const { override, addBabelPlugin } = require('customize-cra');
+
+module.exports = override(
+  addBabelPlugin([
+    'babel-plugin-react-compiler',
+    {
+      // options
+    },
+  ])
+);
+```
+
+</CodeGroup>
+
+### Rollup
+
+Use with `@rollup/plugin-babel`:
+
+```javascript rollup.config.js
+import babel from '@rollup/plugin-babel';
+
+export default {
+  plugins: [
+    babel({
+      babelHelpers: 'bundled',
+      presets: ['@babel/preset-react'],
+      plugins: [
+        [
+          'babel-plugin-react-compiler',
+          {
+            // options
+          },
+        ],
+      ],
+    }),
+  ],
+};
+```
+
+### esbuild
+
+Use with `esbuild-plugin-babel`:
+
+```javascript build.js
+const esbuild = require('esbuild');
+const babel = require('esbuild-plugin-babel');
+
+esbuild.build({
+  entryPoints: ['src/index.jsx'],
+  bundle: true,
+  outfile: 'dist/bundle.js',
+  plugins: [
+    babel({
+      filter: /\.(js|jsx|ts|tsx)$/,
+      config: {
+        presets: ['@babel/preset-react'],
+        plugins: ['babel-plugin-react-compiler'],
+      },
+    }),
+  ],
+});
+```
+
+## Custom Logger
+
+Implement custom logging for compiler events:
+
+```javascript babel.config.js
+class CustomLogger {
+  logEvent(filename, event) {
+    if (event.kind === 'CompileSuccess') {
+      console.log(`✓ Compiled: ${event.fnName} in ${filename}`);
+    } else if (event.kind === 'CompileError') {
+      console.error(`✗ Error in ${filename}:`, event.error);
+    }
+  }
+  
+  debugLogIRs(value) {
+    // Log intermediate representations
+    if (value.kind === 'hir') {
+      console.log('HIR:', value.name);
+    }
+  }
+}
+
+module.exports = {
+  plugins: [
+    [
+      'babel-plugin-react-compiler',
+      {
+        logger: new CustomLogger(),
+      },
+    ],
+  ],
+};
+```
+
+### Logger Interface
+
+```typescript
+interface Logger {
+  // Called for each compilation event
+  logEvent(filename: string | null, event: LogEvent): void;
+  
+  // Called for debug output (when enabled)
+  debugLogIRs?(value: CompilerPipelineValue): void;
+}
+
+type LogEvent =
+  | { kind: 'CompileSuccess'; fnName: string; fnLoc: SourceLocation }
+  | { kind: 'CompileError'; fnName: string | null; error: CompilerError }
+  | { kind: 'CompileDiagnostic'; fnName: string; diagnostic: string }
+  | { kind: 'Timing'; measurement: PerformanceMeasure };
+```
+
+## Performance Optimization
+
+### Enable Caching
+
+```javascript webpack.config.js
+module.exports = {
+  module: {
+    rules: [
+      {
+        test: /\.jsx?$/,
+        use: {
+          loader: 'babel-loader',
+          options: {
+            cacheDirectory: true,
+            cacheCompression: false,
+          },
+        },
+      },
+    ],
+  },
+};
+```
+
+### Exclude node_modules
+
+```javascript
+{
+  test: /\.(js|jsx)$/,
+  exclude: /node_modules/,
+  use: 'babel-loader',
+}
+```
+
+### Parallel Processing
+
+Use `thread-loader` for parallel compilation:
+
+```javascript webpack.config.js
+module.exports = {
+  module: {
+    rules: [
+      {
+        test: /\.jsx?$/,
+        exclude: /node_modules/,
+        use: [
+          'thread-loader',
+          {
+            loader: 'babel-loader',
+            options: {
+              plugins: ['babel-plugin-react-compiler'],
+              cacheDirectory: true,
+            },
+          },
+        ],
+      },
+    ],
+  },
+};
+```
+
+## TypeScript Support
+
+The plugin works seamlessly with TypeScript:
+
+```javascript babel.config.js
+module.exports = {
+  presets: [
+    '@babel/preset-typescript',
+    '@babel/preset-react',
+  ],
+  plugins: [
+    'babel-plugin-react-compiler',
+  ],
+};
+```
+
+### TSX Files
+
+```javascript webpack.config.js
+module.exports = {
+  module: {
+    rules: [
+      {
+        test: /\.(ts|tsx)$/,
+        exclude: /node_modules/,
+        use: {
+          loader: 'babel-loader',
+          options: {
+            presets: [
+              '@babel/preset-typescript',
+              '@babel/preset-react',
+            ],
+            plugins: ['babel-plugin-react-compiler'],
+          },
+        },
+      },
+    ],
+  },
+};
+```
+
+## Debugging
+
+### Enable Compiler Timing
+
+```bash
+ENABLE_REACT_COMPILER_TIMINGS=1 npm run build
+```
+
+### Debug Output
+
+Implement `debugLogIRs` in your logger:
+
+```javascript
+class DebugLogger {
+  debugLogIRs(value) {
+    console.log(`[${value.kind}] ${value.name}`);
+    if (value.kind === 'hir') {
+      console.log(prettyPrintHIR(value.value));
+    }
+  }
+}
+```
+
+### Source Maps
+
+Ensure source maps are enabled:
+
+```javascript webpack.config.js
+module.exports = {
+  devtool: 'source-map',
+  module: {
+    rules: [
+      {
+        test: /\.jsx?$/,
+        use: {
+          loader: 'babel-loader',
+          options: {
+            sourceMaps: true,
+          },
+        },
+      },
+    ],
+  },
+};
+```
+
+## Troubleshooting
+
+### Plugin Order
+
+React Compiler should run early in the plugin chain:
+
+```javascript
+module.exports = {
+  plugins: [
+    'babel-plugin-react-compiler', // First
+    '@babel/plugin-transform-runtime',
+    // Other plugins...
+  ],
+};
+```
+
+### Conflicting Transforms
+
+Avoid transforms that modify React code structure:
+
+```javascript
+// ✗ Bad - may conflict
+plugins: [
+  'babel-plugin-react-compiler',
+  'some-jsx-transform', // May conflict
+]
+
+// ✓ Good
+plugins: [
+  'babel-plugin-react-compiler',
+  // Non-React transforms
+]
+```
+
+### Memory Issues
+
+For large codebases, increase Node memory:
+
+```json package.json
+{
+  "scripts": {
+    "build": "NODE_OPTIONS='--max-old-space-size=4096' webpack"
+  }
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Configuration" icon="sliders" href="/compiler/configuration">
+    Detailed configuration options
+  </Card>
+  <Card title="ESLint Plugin" icon="shield-check" href="/compiler/eslint-plugin">
+    Set up React rules validation
+  </Card>
+  <Card title="How It Works" icon="gear" href="/compiler/how-it-works">
+    Understanding the compilation process
+  </Card>
+  <Card title="Contributing" icon="code-pull-request" href="/compiler/contributing">
+    Contribute to React Compiler
+  </Card>
+</CardGroup>

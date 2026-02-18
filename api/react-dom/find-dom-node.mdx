@@ -1,0 +1,508 @@
+---
+title: findDOMNode
+description: Find the DOM node of a React component (deprecated)
+---
+
+# findDOMNode
+
+<Warning>
+`findDOMNode` is deprecated and will be removed in a future version of React. Use refs instead.
+</Warning>
+
+Returns the browser DOM node corresponding to a React component instance.
+
+```javascript
+import { findDOMNode } from 'react-dom';
+
+const domNode = findDOMNode(componentInstance);
+```
+
+## Reference
+
+### `findDOMNode(componentInstance)`
+
+Call `findDOMNode` to find the browser DOM node for a given React component instance.
+
+```javascript /src/client/ReactDOMClient.js:43-47
+const domNode = findDOMNode(this);
+```
+
+#### Parameters
+
+<ParamField path="componentInstance" type="React.Component" required>
+  An instance of a React component (typically `this` from a class component).
+</ParamField>
+
+#### Returns
+
+<ResponseField name="domNode" type="Element | Text | null">
+  The browser DOM node corresponding to the component. Returns `null` if the component rendered `null` or `false`.
+</ResponseField>
+
+---
+
+## Why Is It Deprecated?
+
+`findDOMNode` has several problems:
+
+1. **Breaks abstraction** - Reaches into component internals
+2. **Only works with class components** - Not compatible with function components
+3. **Returns first child only** - Confusing with fragments
+4. **Prevents optimizations** - React can't optimize as much
+5. **Breaks with Strict Mode** - Causes issues in concurrent rendering
+
+### Migration Timeline
+
+- React 16.3: `findDOMNode` deprecated
+- React 17: Warning in Strict Mode
+- React 18: Stronger warnings
+- Future: Will be removed entirely
+
+---
+
+## Migration Guide
+
+### Pattern 1: Forwarding Refs
+
+**Before (with findDOMNode):**
+```javascript
+import { findDOMNode } from 'react-dom';
+
+class MyInput extends React.Component {
+  focus() {
+    const node = findDOMNode(this);
+    if (node) {
+      node.focus();
+    }
+  }
+  
+  render() {
+    return <input type="text" />;
+  }
+}
+
+// Usage
+class Form extends React.Component {
+  inputRef = React.createRef();
+  
+  handleSubmit = () => {
+    this.inputRef.current.focus();
+  };
+  
+  render() {
+    return (
+      <form>
+        <MyInput ref={this.inputRef} />
+        <button onClick={this.handleSubmit}>Submit</button>
+      </form>
+    );
+  }
+}
+```
+
+**After (with forwardRef):**
+```javascript
+import { forwardRef, useRef, useImperativeHandle } from 'react';
+
+const MyInput = forwardRef((props, ref) => {
+  const inputRef = useRef(null);
+  
+  useImperativeHandle(ref, () => ({
+    focus: () => {
+      inputRef.current?.focus();
+    }
+  }));
+  
+  return <input ref={inputRef} type="text" />;
+});
+
+// Usage
+function Form() {
+  const inputRef = useRef(null);
+  
+  const handleSubmit = () => {
+    inputRef.current?.focus();
+  };
+  
+  return (
+    <form>
+      <MyInput ref={inputRef} />
+      <button onClick={handleSubmit}>Submit</button>
+    </form>
+  );
+}
+```
+
+### Pattern 2: Direct Refs
+
+**Before (with findDOMNode):**
+```javascript
+import { findDOMNode } from 'react-dom';
+
+class ImageGallery extends React.Component {
+  componentDidMount() {
+    const node = findDOMNode(this);
+    if (node instanceof Element) {
+      this.observer = new IntersectionObserver(entries => {
+        // Handle visibility
+      });
+      this.observer.observe(node);
+    }
+  }
+  
+  componentWillUnmount() {
+    this.observer?.disconnect();
+  }
+  
+  render() {
+    return <div className="gallery">{/* images */}</div>;
+  }
+}
+```
+
+**After (with ref):**
+```javascript
+import { useRef, useEffect } from 'react';
+
+function ImageGallery() {
+  const galleryRef = useRef(null);
+  
+  useEffect(() => {
+    const node = galleryRef.current;
+    if (!node) return;
+    
+    const observer = new IntersectionObserver(entries => {
+      // Handle visibility
+    });
+    
+    observer.observe(node);
+    
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
+  
+  return <div ref={galleryRef} className="gallery">{/* images */}</div>;
+}
+```
+
+### Pattern 3: Measuring Elements
+
+**Before (with findDOMNode):**
+```javascript
+import { findDOMNode } from 'react-dom';
+
+class Tooltip extends React.Component {
+  state = { width: 0 };
+  
+  componentDidMount() {
+    const node = findDOMNode(this);
+    if (node instanceof Element) {
+      this.setState({ width: node.offsetWidth });
+    }
+  }
+  
+  render() {
+    return (
+      <div className="tooltip">
+        Tooltip (width: {this.state.width}px)
+      </div>
+    );
+  }
+}
+```
+
+**After (with ref and ResizeObserver):**
+```javascript
+import { useRef, useEffect, useState } from 'react';
+
+function Tooltip() {
+  const tooltipRef = useRef(null);
+  const [width, setWidth] = useState(0);
+  
+  useEffect(() => {
+    const node = tooltipRef.current;
+    if (!node) return;
+    
+    // Initial measurement
+    setWidth(node.offsetWidth);
+    
+    // Watch for size changes
+    const observer = new ResizeObserver(entries => {
+      for (const entry of entries) {
+        setWidth(entry.contentRect.width);
+      }
+    });
+    
+    observer.observe(node);
+    
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
+  
+  return (
+    <div ref={tooltipRef} className="tooltip">
+      Tooltip (width: {width}px)
+    </div>
+  );
+}
+```
+
+### Pattern 4: Event Listeners
+
+**Before (with findDOMNode):**
+```javascript
+import { findDOMNode } from 'react-dom';
+
+class ClickOutside extends React.Component {
+  componentDidMount() {
+    document.addEventListener('click', this.handleClickOutside);
+  }
+  
+  componentWillUnmount() {
+    document.removeEventListener('click', this.handleClickOutside);
+  }
+  
+  handleClickOutside = (event) => {
+    const node = findDOMNode(this);
+    if (node && !node.contains(event.target)) {
+      this.props.onClickOutside?.();
+    }
+  };
+  
+  render() {
+    return <div>{this.props.children}</div>;
+  }
+}
+```
+
+**After (with ref):**
+```javascript
+import { useRef, useEffect } from 'react';
+
+function ClickOutside({ children, onClickOutside }) {
+  const containerRef = useRef(null);
+  
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (containerRef.current && !containerRef.current.contains(event.target)) {
+        onClickOutside?.();
+      }
+    }
+    
+    document.addEventListener('click', handleClickOutside);
+    
+    return () => {
+      document.removeEventListener('click', handleClickOutside);
+    };
+  }, [onClickOutside]);
+  
+  return <div ref={containerRef}>{children}</div>;
+}
+```
+
+### Pattern 5: Third-Party Library Integration
+
+**Before (with findDOMNode):**
+```javascript
+import { findDOMNode } from 'react-dom';
+import Picker from 'some-picker-library';
+
+class DatePicker extends React.Component {
+  componentDidMount() {
+    const node = findDOMNode(this);
+    this.picker = new Picker(node, this.props.options);
+  }
+  
+  componentWillUnmount() {
+    this.picker?.destroy();
+  }
+  
+  render() {
+    return <input type="text" />;
+  }
+}
+```
+
+**After (with ref):**
+```javascript
+import { useRef, useEffect } from 'react';
+import Picker from 'some-picker-library';
+
+function DatePicker({ options }) {
+  const inputRef = useRef(null);
+  const pickerRef = useRef(null);
+  
+  useEffect(() => {
+    if (!inputRef.current) return;
+    
+    pickerRef.current = new Picker(inputRef.current, options);
+    
+    return () => {
+      pickerRef.current?.destroy();
+    };
+  }, [options]);
+  
+  return <input ref={inputRef} type="text" />;
+}
+```
+
+## Common Scenarios
+
+### Focus Management
+
+```javascript
+// Modern approach
+import { useRef } from 'react';
+
+function SearchBox() {
+  const inputRef = useRef(null);
+  
+  const handleSearch = () => {
+    inputRef.current?.focus();
+  };
+  
+  return (
+    <>
+      <input ref={inputRef} type="text" />
+      <button onClick={handleSearch}>Search</button>
+    </>
+  );
+}
+```
+
+### Scrolling to Element
+
+```javascript
+import { useRef } from 'react';
+
+function CommentList({ comments }) {
+  const lastCommentRef = useRef(null);
+  
+  const scrollToLast = () => {
+    lastCommentRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+  
+  return (
+    <div>
+      {comments.map((comment, i) => (
+        <div
+          key={comment.id}
+          ref={i === comments.length - 1 ? lastCommentRef : null}
+        >
+          {comment.text}
+        </div>
+      ))}
+      <button onClick={scrollToLast}>Scroll to Last</button>
+    </div>
+  );
+}
+```
+
+### Animation
+
+```javascript
+import { useRef, useEffect } from 'react';
+
+function FadeIn({ children }) {
+  const containerRef = useRef(null);
+  
+  useEffect(() => {
+    const node = containerRef.current;
+    if (!node) return;
+    
+    node.style.opacity = '0';
+    node.style.transition = 'opacity 300ms';
+    
+    // Trigger animation
+    requestAnimationFrame(() => {
+      node.style.opacity = '1';
+    });
+  }, []);
+  
+  return <div ref={containerRef}>{children}</div>;
+}
+```
+
+## TypeScript
+
+```typescript
+import { useRef, useEffect } from 'react';
+
+function MyComponent() {
+  // Type the ref appropriately
+  const divRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  
+  useEffect(() => {
+    // TypeScript knows the exact type
+    if (divRef.current) {
+      const width: number = divRef.current.offsetWidth;
+    }
+    
+    if (inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, []);
+  
+  return (
+    <>
+      <div ref={divRef}>Content</div>
+      <input ref={inputRef} type="text" />
+      <button ref={buttonRef}>Click</button>
+    </>
+  );
+}
+```
+
+## Testing
+
+```javascript
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+
+function Button({ onClick }) {
+  const buttonRef = useRef(null);
+  
+  return (
+    <button ref={buttonRef} onClick={onClick}>
+      Click me
+    </button>
+  );
+}
+
+test('button is clickable', async () => {
+  const handleClick = vi.fn();
+  render(<Button onClick={handleClick} />);
+  
+  const button = screen.getByRole('button');
+  await userEvent.click(button);
+  
+  expect(handleClick).toHaveBeenCalledTimes(1);
+});
+```
+
+## When You Might Still See It
+
+You might encounter `findDOMNode` in:
+
+1. **Legacy codebases** - Old React code not yet migrated
+2. **Third-party libraries** - Older libraries still using it
+3. **React Native** - Different implementation, not deprecated there
+
+## Best Practices
+
+1. **Use refs instead** - Modern, performant, and future-proof
+2. **Forward refs when needed** - For component composition
+3. **Use useImperativeHandle** - For exposing imperative methods
+4. **Avoid DOM manipulation** - Let React manage the DOM
+5. **Migrate legacy code** - Update `findDOMNode` usage proactively
+
+## Related APIs
+
+- [useRef](/api/react/use-ref) - Create refs in function components
+- [forwardRef](/api/react/forward-ref) - Forward refs through components
+- [useImperativeHandle](/api/react/use-imperative-handle) - Customize ref values
+- [createRef](/api/react/create-ref) - Create refs in class components

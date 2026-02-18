@@ -1,0 +1,655 @@
+---
+title: 'Memoization'
+description: 'Using React.memo, useMemo, and useCallback to optimize component performance'
+---
+
+# Memoization
+
+Memoization is a technique to cache computed values and skip unnecessary re-renders, improving performance by avoiding redundant work.
+
+## React.memo
+
+`React.memo` is a higher-order component that prevents re-renders when props haven't changed. It performs a shallow comparison of props (see `ReactMemo.js:12`).
+
+### Implementation
+
+From `ReactMemo.js:12-29`, `React.memo` wraps a component and optionally accepts a custom comparison function:
+
+```javascript
+// Simplified from ReactMemo.js
+export function memo<Props>(
+  type: React$ElementType,
+  compare?: (oldProps: Props, newProps: Props) => boolean,
+) {
+  const elementType = {
+    $$typeof: REACT_MEMO_TYPE,
+    type,
+    compare: compare === undefined ? null : compare,
+  };
+  return elementType;
+}
+```
+
+### Basic Usage
+
+```jsx
+import { memo } from 'react';
+
+function UserCard({ name, email, avatar }) {
+  console.log('UserCard rendered');
+  return (
+    <div>
+      <img src={avatar} alt={name} />
+      <h3>{name}</h3>
+      <p>{email}</p>
+    </div>
+  );
+}
+
+// UserCard only re-renders when name, email, or avatar change
+export default memo(UserCard);
+```
+
+### Before: Unnecessary Re-renders
+
+```jsx
+function ParentComponent() {
+  const [count, setCount] = useState(0);
+  const [user, setUser] = useState({ name: 'Alice', email: 'alice@example.com' });
+  
+  return (
+    <div>
+      <button onClick={() => setCount(count + 1)}>
+        Count: {count}
+      </button>
+      {/* UserCard re-renders every time count changes */}
+      <UserCard name={user.name} email={user.email} />
+    </div>
+  );
+}
+```
+
+### After: Optimized with memo
+
+```jsx
+const UserCard = memo(function UserCard({ name, email }) {
+  console.log('UserCard rendered');
+  return (
+    <div>
+      <h3>{name}</h3>
+      <p>{email}</p>
+    </div>
+  );
+});
+
+function ParentComponent() {
+  const [count, setCount] = useState(0);
+  const [user, setUser] = useState({ name: 'Alice', email: 'alice@example.com' });
+  
+  return (
+    <div>
+      <button onClick={() => setCount(count + 1)}>
+        Count: {count}
+      </button>
+      {/* UserCard now skips re-renders when count changes */}
+      <UserCard name={user.name} email={user.email} />
+    </div>
+  );
+}
+```
+
+**Result**: When clicking the button, only the parent re-renders. `UserCard` stays unchanged because its props haven't changed.
+
+### Custom Comparison Function
+
+By default, `React.memo` does shallow comparison. Provide a custom comparison for complex scenarios:
+
+```jsx
+function UserCard({ user, settings }) {
+  return <div>{user.name}</div>;
+}
+
+// Custom comparison: only re-render if user.name changes
+export default memo(UserCard, (prevProps, nextProps) => {
+  // Return true if props are equal (skip render)
+  // Return false if props are different (re-render)
+  return prevProps.user.name === nextProps.user.name;
+});
+```
+
+<Warning>
+The custom comparison function works opposite to `shouldComponentUpdate`. Return `true` to skip rendering, `false` to re-render.
+</Warning>
+
+### Display Name Handling
+
+From `ReactMemo.js:31-56`, React automatically handles display names for debugging:
+
+```jsx
+// Anonymous function gets the display name
+const MemoizedComponent = memo((props) => {
+  return <div>{props.content}</div>;
+});
+
+MemoizedComponent.displayName = 'MyComponent';
+// Now shows as "MyComponent" in React DevTools
+```
+
+## useMemo
+
+`useMemo` caches expensive calculations, recomputing only when dependencies change (see `ReactHooks.js:143`).
+
+### Implementation
+
+From `ReactHooks.js:143-149`:
+
+```javascript
+export function useMemo<T>(
+  create: () => T,
+  deps: Array<mixed> | void | null,
+): T {
+  const dispatcher = resolveDispatcher();
+  return dispatcher.useMemo(create, deps);
+}
+```
+
+### Basic Usage
+
+```jsx
+import { useMemo } from 'react';
+
+function ProductList({ products, filter }) {
+  // Expensive calculation only runs when products or filter change
+  const filteredProducts = useMemo(() => {
+    console.log('Filtering products...');
+    return products
+      .filter(p => p.category === filter)
+      .sort((a, b) => b.rating - a.rating);
+  }, [products, filter]);
+  
+  return (
+    <ul>
+      {filteredProducts.map(p => (
+        <li key={p.id}>{p.name}</li>
+      ))}
+    </ul>
+  );
+}
+```
+
+### Before: Re-computing on Every Render
+
+```jsx
+function DataDashboard({ data }) {
+  const [sortOrder, setSortOrder] = useState('asc');
+  
+  // This calculation runs on EVERY render, even if data doesn't change
+  const processedData = data
+    .map(item => ({ ...item, computed: expensiveCalculation(item) }))
+    .sort((a, b) => sortOrder === 'asc' ? a.value - b.value : b.value - a.value);
+  
+  return (
+    <div>
+      <button onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}>
+        Toggle Sort
+      </button>
+      <DataTable data={processedData} />
+    </div>
+  );
+}
+```
+
+### After: Optimized with useMemo
+
+```jsx
+function DataDashboard({ data }) {
+  const [sortOrder, setSortOrder] = useState('asc');
+  
+  // Expensive calculation cached - only re-runs when data or sortOrder change
+  const processedData = useMemo(() => {
+    console.log('Processing data...');
+    return data
+      .map(item => ({ ...item, computed: expensiveCalculation(item) }))
+      .sort((a, b) => sortOrder === 'asc' ? a.value - b.value : b.value - a.value);
+  }, [data, sortOrder]);
+  
+  return (
+    <div>
+      <button onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}>
+        Toggle Sort
+      </button>
+      <DataTable data={processedData} />
+    </div>
+  );
+}
+```
+
+**Result**: The expensive calculation only runs when `data` or `sortOrder` actually changes, not on every render.
+
+### Referential Equality
+
+Use `useMemo` to maintain stable object references:
+
+```jsx
+function UserProfile({ userId, theme }) {
+  // Without useMemo: new object on every render
+  // const config = { userId, theme, timestamp: Date.now() };
+  
+  // With useMemo: same object reference if dependencies don't change
+  const config = useMemo(
+    () => ({ userId, theme, timestamp: Date.now() }),
+    [userId, theme]
+  );
+  
+  // UserSettings won't re-render unnecessarily
+  return <UserSettings config={config} />;
+}
+
+const UserSettings = memo(function UserSettings({ config }) {
+  return <div>{config.userId}</div>;
+});
+```
+
+## useCallback
+
+`useCallback` memoizes functions, ensuring the same function reference across renders (see `ReactHooks.js:135`).
+
+### Implementation
+
+From `ReactHooks.js:135-141`:
+
+```javascript
+export function useCallback<T>(
+  callback: T,
+  deps: Array<mixed> | void | null,
+): T {
+  const dispatcher = resolveDispatcher();
+  return dispatcher.useCallback(callback, deps);
+}
+```
+
+### Basic Usage
+
+```jsx
+import { useCallback } from 'react';
+
+function TodoList({ todos }) {
+  const [filter, setFilter] = useState('all');
+  
+  // Function reference stays the same unless filter changes
+  const handleToggle = useCallback((id) => {
+    console.log(`Toggle todo ${id} with filter ${filter}`);
+    // Toggle logic here
+  }, [filter]);
+  
+  return (
+    <ul>
+      {todos.map(todo => (
+        <TodoItem 
+          key={todo.id} 
+          todo={todo} 
+          onToggle={handleToggle}
+        />
+      ))}
+    </ul>
+  );
+}
+
+const TodoItem = memo(function TodoItem({ todo, onToggle }) {
+  return (
+    <li onClick={() => onToggle(todo.id)}>
+      {todo.text}
+    </li>
+  );
+});
+```
+
+### Before: New Function on Every Render
+
+```jsx
+function SearchBar({ onSearch }) {
+  const [query, setQuery] = useState('');
+  
+  return (
+    <div>
+      <input 
+        value={query} 
+        onChange={(e) => setQuery(e.target.value)} 
+      />
+      {/* New function created on every render */}
+      <SearchResults 
+        onResultClick={(id) => {
+          console.log('Clicked:', id);
+          onSearch(id);
+        }}
+      />
+    </div>
+  );
+}
+
+const SearchResults = memo(function SearchResults({ onResultClick }) {
+  // Re-renders on every parent render because onResultClick changes
+  return <div>Results...</div>;
+});
+```
+
+### After: Stable Function Reference
+
+```jsx
+function SearchBar({ onSearch }) {
+  const [query, setQuery] = useState('');
+  
+  // Function reference stays stable across renders
+  const handleResultClick = useCallback((id) => {
+    console.log('Clicked:', id);
+    onSearch(id);
+  }, [onSearch]);
+  
+  return (
+    <div>
+      <input 
+        value={query} 
+        onChange={(e) => setQuery(e.target.value)} 
+      />
+      {/* SearchResults won't re-render unnecessarily */}
+      <SearchResults onResultClick={handleResultClick} />
+    </div>
+  );
+}
+
+const SearchResults = memo(function SearchResults({ onResultClick }) {
+  // Only re-renders when onResultClick actually changes
+  return <div>Results...</div>;
+});
+```
+
+**Result**: `SearchResults` doesn't re-render when typing in the input field because `handleResultClick` maintains the same reference.
+
+### useCallback vs useMemo
+
+`useCallback` is a shorthand for `useMemo` that returns a function:
+
+```jsx
+// These are equivalent:
+const handleClick = useCallback(() => {
+  console.log('clicked');
+}, []);
+
+const handleClick = useMemo(() => {
+  return () => console.log('clicked');
+}, []);
+```
+
+## When to Memoize
+
+<Tip>
+Memoization is useful when:
+
+- Component renders frequently with the same props
+- Component has expensive calculations or rendering
+- Passing callbacks to memoized child components
+- Working with large lists or complex data structures
+- Preventing effect re-runs with stable dependencies
+</Tip>
+
+### Good Candidates for Memoization
+
+```jsx
+// ✅ Expensive calculation
+const sortedData = useMemo(
+  () => largeArray.sort().filter(complexCondition),
+  [largeArray]
+);
+
+// ✅ Frequently rendered with same props
+const ListItem = memo(function ListItem({ item }) {
+  return <ExpensiveComponent data={item} />;
+});
+
+// ✅ Callback passed to memoized child
+const handleClick = useCallback(
+  (id) => updateItem(id),
+  [updateItem]
+);
+
+// ✅ Complex object used in effects
+const config = useMemo(
+  () => ({ endpoint, headers, retry: 3 }),
+  [endpoint, headers]
+);
+```
+
+### Poor Candidates for Memoization
+
+```jsx
+// ❌ Simple calculation (memoization overhead not worth it)
+const doubled = useMemo(() => count * 2, [count]);
+
+// ❌ Component that rarely renders
+const RarelyRendered = memo(function RarelyRendered({ data }) {
+  return <div>{data}</div>;
+});
+
+// ❌ Props change on every render anyway
+const timestamped = useMemo(
+  () => ({ data, timestamp: Date.now() }),
+  [data]
+);
+
+// ❌ Callback not passed to memoized components
+const handleClick = useCallback(
+  () => console.log('click'),
+  []
+);
+// If not passed to memo'd children, regular function is fine
+```
+
+<Warning>
+**Avoid premature optimization!** Memoization has costs:
+
+- Memory overhead to store cached values
+- Comparison overhead on every render
+- Code complexity and maintenance burden
+
+Only memoize when profiling shows a real performance problem. In many cases, React's default behavior is fast enough.
+</Warning>
+
+## Memoization Trade-offs
+
+### Memory vs Speed
+
+```jsx
+function DataGrid({ data }) {
+  // Trades memory for speed
+  const processedRows = useMemo(() => {
+    // This result is cached in memory
+    return data.map(row => expensiveTransform(row));
+  }, [data]);
+  
+  // Consider: Is the memory cost worth it?
+  // If data is large and changes frequently, maybe not
+}
+```
+
+### Comparison Overhead
+
+```jsx
+// Shallow comparison is fast
+const MemoizedSimple = memo(function Simple({ name, age }) {
+  return <div>{name}</div>;
+});
+
+// Deep comparison is expensive - avoid if possible
+const MemoizedComplex = memo(
+  function Complex({ deeply, nested, object }) {
+    return <div>{deeply.nested.object.value}</div>;
+  },
+  (prev, next) => {
+    // This comparison runs on every render
+    return isDeepEqual(prev, next); // Expensive!
+  }
+);
+```
+
+### Dependency Management
+
+```jsx
+function SearchComponent({ items, filters }) {
+  // Dependencies must be complete and stable
+  const filtered = useMemo(() => {
+    return items.filter(item => {
+      // If you use filters.category but don't list it in deps,
+      // you'll have stale data
+      return item.category === filters.category;
+    });
+  }, [items, filters.category]); // ✅ Correct dependencies
+  
+  // ❌ Wrong: missing dependency
+  // }, [items]);
+}
+```
+
+<Tip>
+Use the `eslint-plugin-react-hooks` ESLint plugin to catch missing dependencies. It warns when your dependency array might be incorrect.
+</Tip>
+
+## Real-World Patterns
+
+### Combining Memoization Techniques
+
+From `ReactProfiler-test.internal.js:204`, here's a pattern combining `React.memo` with `useMemo`:
+
+```jsx
+const DataTable = memo(function DataTable({ data, sortKey }) {
+  // Component only re-renders when props change (memo)
+  // AND computation only re-runs when dependencies change (useMemo)
+  const sortedData = useMemo(
+    () => [...data].sort((a, b) => a[sortKey] - b[sortKey]),
+    [data, sortKey]
+  );
+  
+  return (
+    <table>
+      {sortedData.map(row => (
+        <TableRow key={row.id} data={row} />
+      ))}
+    </table>
+  );
+});
+
+const TableRow = memo(function TableRow({ data }) {
+  // Each row only re-renders when its data changes
+  return (
+    <tr>
+      <td>{data.name}</td>
+      <td>{data.value}</td>
+    </tr>
+  );
+});
+```
+
+### Memoizing Context Values
+
+```jsx
+const UserContext = createContext();
+
+function UserProvider({ children }) {
+  const [user, setUser] = useState(null);
+  
+  // Without useMemo, all consumers re-render on every parent render
+  const value = useMemo(
+    () => ({ user, setUser }),
+    [user]
+  );
+  
+  return (
+    <UserContext.Provider value={value}>
+      {children}
+    </UserContext.Provider>
+  );
+}
+```
+
+### Optimizing Event Handlers
+
+```jsx
+function Form({ onSubmit }) {
+  const [values, setValues] = useState({ name: '', email: '' });
+  
+  // Stable references for form field callbacks
+  const handleNameChange = useCallback(
+    (e) => setValues(v => ({ ...v, name: e.target.value })),
+    []
+  );
+  
+  const handleEmailChange = useCallback(
+    (e) => setValues(v => ({ ...v, email: e.target.value })),
+    []
+  );
+  
+  const handleSubmit = useCallback(
+    (e) => {
+      e.preventDefault();
+      onSubmit(values);
+    },
+    [values, onSubmit]
+  );
+  
+  return (
+    <form onSubmit={handleSubmit}>
+      <MemoizedInput value={values.name} onChange={handleNameChange} />
+      <MemoizedInput value={values.email} onChange={handleEmailChange} />
+      <button type="submit">Submit</button>
+    </form>
+  );
+}
+
+const MemoizedInput = memo(function Input({ value, onChange }) {
+  return <input value={value} onChange={onChange} />;
+});
+```
+
+## Debugging Memoization
+
+### Check if memoization works:
+
+```jsx
+const ExpensiveComponent = memo(function ExpensiveComponent({ data }) {
+  console.log('ExpensiveComponent rendered');
+  return <div>{data}</div>;
+});
+
+// In parent component:
+function Parent() {
+  const [count, setCount] = useState(0);
+  
+  return (
+    <div>
+      <button onClick={() => setCount(c => c + 1)}>Count: {count}</button>
+      <ExpensiveComponent data="static" />
+    </div>
+  );
+}
+
+// Click the button multiple times
+// If memoization works: "ExpensiveComponent rendered" logs only once
+// If it doesn't work: logs on every click
+```
+
+### Using React DevTools
+
+React DevTools Profiler shows why components re-rendered:
+
+1. Open React DevTools
+2. Go to Profiler tab
+3. Record a session
+4. Click on a component in the flame graph
+5. Check "Why did this render?" to see which props changed
+
+## Related Resources
+
+- [Performance Optimization Strategies](/performance/optimization)
+- [React Profiler Component](/performance/profiler)
+- [React.memo API Reference](https://react.dev/reference/react/memo)
+- [useMemo Hook](https://react.dev/reference/react/useMemo)
+- [useCallback Hook](https://react.dev/reference/react/useCallback)

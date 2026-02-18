@@ -1,0 +1,194 @@
+---
+title: Hooks Overview
+description: React Hooks are functions that let you use state and other React features in function components
+---
+
+Hooks are functions that let you "hook into" React state and lifecycle features from function components. They let you use state and other React features without writing a class.
+
+## Built-in Hooks
+
+React provides several built-in Hooks for different purposes:
+
+### State Hooks
+
+State lets a component remember information like user input.
+
+- [`useState`](/api/hooks/use-state) - Declares a state variable
+- [`useReducer`](/api/hooks/use-reducer) - Declares a state variable with reducer logic
+
+### Context Hooks
+
+Context lets a component receive information from distant parents without passing it as props.
+
+- [`useContext`](/api/hooks/use-context) - Reads and subscribes to a context
+
+### Ref Hooks
+
+Refs let a component hold information that isn't used for rendering, like a DOM node.
+
+- [`useRef`](/api/hooks/use-ref) - Declares a ref
+- [`useImperativeHandle`](/api/hooks/use-imperative-handle) - Customizes the ref exposed by your component
+
+### Effect Hooks
+
+Effects let a component connect to and synchronize with external systems.
+
+- [`useEffect`](/api/hooks/use-effect) - Connects to an external system
+- [`useLayoutEffect`](/api/hooks/use-layout-effect) - Fires before browser paint
+- [`useInsertionEffect`](/api/hooks/use-insertion-effect) - Fires before React makes DOM changes
+
+### Performance Hooks
+
+These hooks help optimize re-rendering performance.
+
+- [`useMemo`](/api/hooks/use-memo) - Caches the result of an expensive calculation
+- [`useCallback`](/api/hooks/use-callback) - Caches a function definition
+- [`useTransition`](/api/hooks/use-transition) - Marks state updates as non-urgent
+- [`useDeferredValue`](/api/hooks/use-deferred-value) - Defers updating a part of the UI
+
+### Resource Hooks
+
+These hooks let components access resources without them being part of their state.
+
+- [`use`](/api/hooks/use) - Reads the value of a Promise or Context
+
+### Other Hooks
+
+- [`useId`](/api/hooks/use-id) - Generates unique IDs
+- [`useSyncExternalStore`](/api/hooks/use-sync-external-store) - Subscribes to an external store
+- [`useActionState`](/api/hooks/use-action-state) - Manages state for Server Actions
+- [`useOptimistic`](/api/hooks/use-optimistic) - Shows optimistic UI updates
+- [`useDebugValue`](/api/hooks/use-debug-value) - Customizes debug display in React DevTools
+
+## Rules of Hooks
+
+Hooks are JavaScript functions with two important rules:
+
+### Only call Hooks at the top level
+
+**Don't call Hooks inside loops, conditions, or nested functions.** Instead, always use Hooks at the top level of your React function, before any early returns.
+
+```javascript
+function Component() {
+  // ✅ Good: Top level of component
+  const [state, setState] = useState(0);
+  
+  if (condition) {
+    // ❌ Bad: Inside condition
+    const [other, setOther] = useState(1);
+  }
+  
+  // ✅ Good: Top level
+  useEffect(() => {
+    // Effect logic
+  });
+}
+```
+
+### Only call Hooks from React functions
+
+**Don't call Hooks from regular JavaScript functions.** Instead, you can:
+
+- ✅ Call Hooks from React function components
+- ✅ Call Hooks from custom Hooks
+
+```javascript
+// ❌ Bad: Regular function
+function regularFunction() {
+  const [state, setState] = useState(0);
+}
+
+// ✅ Good: React component
+function Component() {
+  const [state, setState] = useState(0);
+}
+
+// ✅ Good: Custom Hook
+function useCustomHook() {
+  const [state, setState] = useState(0);
+  return state;
+}
+```
+
+## Custom Hooks
+
+You can create your own Hooks to extract component logic into reusable functions. Custom Hooks are JavaScript functions whose name starts with "use" and that may call other Hooks.
+
+```javascript
+import { useState, useEffect } from 'react';
+
+function useWindowWidth() {
+  const [width, setWidth] = useState(window.innerWidth);
+  
+  useEffect(() => {
+    const handleResize = () => setWidth(window.innerWidth);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+  
+  return width;
+}
+
+// Usage in component
+function MyComponent() {
+  const width = useWindowWidth();
+  return <div>Window width: {width}px</div>;
+}
+```
+
+<Note>
+Custom Hooks let you share stateful logic, not state itself. Each call to a Hook is completely independent from every other call to the same Hook.
+</Note>
+
+## Hook Call Requirements
+
+<Warning>
+Hooks can only be called inside the body of a function component. Calling Hooks outside of a React component will result in an error:
+
+```
+Invalid hook call. Hooks can only be called inside of the body of a function component.
+```
+
+This error can happen for these reasons:
+1. Mismatching versions of React and the renderer (e.g., React DOM)
+2. Breaking the Rules of Hooks
+3. Having more than one copy of React in the same app
+</Warning>
+
+## TypeScript Support
+
+All React Hooks have built-in TypeScript types. You can use generics to specify types:
+
+```typescript
+const [count, setCount] = useState<number>(0);
+const [user, setUser] = useState<User | null>(null);
+const ref = useRef<HTMLDivElement>(null);
+```
+
+## Performance Considerations
+
+- Hooks don't add runtime overhead compared to class components
+- State updates are batched automatically in React 18+
+- Use performance hooks like `useMemo` and `useCallback` only when needed
+- Don't optimize prematurely - measure first
+
+## Migration from Classes
+
+If you're migrating from class components:
+
+| Class Component | Hook Equivalent |
+|----------------|----------------|
+| `this.state` | `useState` |
+| `this.setState` | `useState` setter |
+| `componentDidMount` | `useEffect(() => {...}, [])` |
+| `componentDidUpdate` | `useEffect(() => {...})` |
+| `componentWillUnmount` | `useEffect` cleanup function |
+| `this.myRef` | `useRef` |
+| Context Consumer | `useContext` |
+
+## Next Steps
+
+- Start with [`useState`](/api/hooks/use-state) for basic state management
+- Learn [`useEffect`](/api/hooks/use-effect) for side effects
+- Explore [`useContext`](/api/hooks/use-context) for prop drilling solutions
+- Dive into performance hooks when needed

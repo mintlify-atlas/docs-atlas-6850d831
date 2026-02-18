@@ -1,0 +1,287 @@
+---
+title: Describing the UI
+description: Learn how to create and organize React components to build user interfaces
+---
+
+# Describing the UI
+
+React applications are built from isolated pieces of UI called components. A React component is a JavaScript function that returns markup.
+
+## Creating Your First Component
+
+React components are regular JavaScript functions, but their names must start with a capital letter or they won't work.
+
+```jsx
+function Welcome() {
+  return <h1>Hello, React!</h1>;
+}
+```
+
+<Steps>
+
+### Define the component
+
+Create a JavaScript function with a capital letter name:
+
+```jsx
+function ProfileCard() {
+  // Component logic goes here
+}
+```
+
+### Return JSX markup
+
+Return the UI elements you want to display:
+
+```jsx
+function ProfileCard() {
+  return (
+    <div className="card">
+      <img src="avatar.jpg" alt="Profile" />
+      <h2>Jane Doe</h2>
+      <p>Software Engineer</p>
+    </div>
+  );
+}
+```
+
+### Use the component
+
+Import and use it like an HTML tag:
+
+```jsx
+function App() {
+  return (
+    <div>
+      <ProfileCard />
+    </div>
+  );
+}
+```
+
+</Steps>
+
+## Understanding JSX
+
+JSX is a syntax extension for JavaScript that lets you write HTML-like markup inside JavaScript files.
+
+### JSX Rules
+
+<Note>
+**Key differences from HTML:**
+- Return a single root element (or use fragments `<>...</>`)
+- Close all tags (even self-closing like `<img />`)
+- Use camelCase for attributes (`className` not `class`, `onClick` not `onclick`)
+</Note>
+
+```jsx
+function UserProfile() {
+  return (
+    <>
+      <img src="photo.jpg" alt="User" className="avatar" />
+      <div>
+        <h1>Welcome back!</h1>
+        <p>You have 3 new messages.</p>
+      </div>
+    </>
+  );
+}
+```
+
+### Embedding JavaScript in JSX
+
+Use curly braces `{}` to include JavaScript expressions:
+
+```jsx
+function Greeting() {
+  const name = "Alice";
+  const timeOfDay = new Date().getHours() < 12 ? "morning" : "evening";
+  
+  return (
+    <div>
+      <h1>Good {timeOfDay}, {name}!</h1>
+      <p>Current time: {new Date().toLocaleTimeString()}</p>
+    </div>
+  );
+}
+```
+
+## Nesting Components
+
+Components can render other components to create complex UIs:
+
+```jsx
+function Avatar({ src, alt }) {
+  return <img src={src} alt={alt} className="avatar" />;
+}
+
+function UserInfo({ name, email }) {
+  return (
+    <div className="user-info">
+      <h3>{name}</h3>
+      <p>{email}</p>
+    </div>
+  );
+}
+
+function UserCard({ user }) {
+  return (
+    <div className="card">
+      <Avatar src={user.avatar} alt={user.name} />
+      <UserInfo name={user.name} email={user.email} />
+    </div>
+  );
+}
+```
+
+<Note>
+**Never define components inside other components!** This causes performance issues and bugs. Always define each component at the top level.
+</Note>
+
+## Passing Props
+
+Props let you pass data from parent to child components:
+
+```jsx
+function Button({ text, color, icon }) {
+  return (
+    <button className={`btn btn-${color}`}>
+      {icon && <span className="icon">{icon}</span>}
+      {text}
+    </button>
+  );
+}
+
+function App() {
+  return (
+    <div>
+      <Button text="Save" color="primary" icon="💾" />
+      <Button text="Delete" color="danger" icon="🗑️" />
+      <Button text="Cancel" color="secondary" />
+    </div>
+  );
+}
+```
+
+### Default Props
+
+Provide default values using JavaScript default parameters:
+
+```jsx
+function Card({ title = "Untitled", children, variant = "default" }) {
+  return (
+    <div className={`card card-${variant}`}>
+      <h2>{title}</h2>
+      <div className="card-body">{children}</div>
+    </div>
+  );
+}
+```
+
+## Organizing Component Files
+
+As your app grows, organize components into separate files:
+
+```jsx
+// components/Button.jsx
+export default function Button({ children, onClick, variant = "primary" }) {
+  return (
+    <button className={`btn btn-${variant}`} onClick={onClick}>
+      {children}
+    </button>
+  );
+}
+
+// components/Header.jsx
+import Button from './Button';
+
+export default function Header() {
+  return (
+    <header>
+      <h1>My App</h1>
+      <Button variant="secondary">Login</Button>
+    </header>
+  );
+}
+
+// App.jsx
+import Header from './components/Header';
+
+function App() {
+  return (
+    <div>
+      <Header />
+      {/* Rest of your app */}
+    </div>
+  );
+}
+```
+
+### File Naming Conventions
+
+- Use PascalCase for component files: `UserProfile.jsx`, `NavBar.jsx`
+- Use lowercase for utility files: `utils.js`, `helpers.js`
+- Keep one component per file (with exceptions for small related components)
+
+## Complete Example
+
+Here's a complete example bringing everything together:
+
+```jsx
+// components/ProductCard.jsx
+function ProductImage({ src, alt }) {
+  return (
+    <div className="product-image">
+      <img src={src} alt={alt} />
+    </div>
+  );
+}
+
+function ProductInfo({ name, price, inStock }) {
+  return (
+    <div className="product-info">
+      <h3>{name}</h3>
+      <p className="price">${price.toFixed(2)}</p>
+      {!inStock && <span className="badge">Out of Stock</span>}
+    </div>
+  );
+}
+
+export default function ProductCard({ product }) {
+  return (
+    <article className="product-card">
+      <ProductImage src={product.image} alt={product.name} />
+      <ProductInfo 
+        name={product.name}
+        price={product.price}
+        inStock={product.inStock}
+      />
+      <button disabled={!product.inStock}>
+        {product.inStock ? "Add to Cart" : "Notify Me"}
+      </button>
+    </article>
+  );
+}
+
+// App.jsx
+import ProductCard from './components/ProductCard';
+
+function App() {
+  const products = [
+    { id: 1, name: "Laptop", price: 999.99, image: "/laptop.jpg", inStock: true },
+    { id: 2, name: "Mouse", price: 29.99, image: "/mouse.jpg", inStock: false },
+  ];
+
+  return (
+    <div className="product-grid">
+      {products.map(product => (
+        <ProductCard key={product.id} product={product} />
+      ))}
+    </div>
+  );
+}
+```
+
+## Next Steps
+
+Now that you understand components and JSX, learn how to make your components interactive with [event handlers](/guides/adding-interactivity).
