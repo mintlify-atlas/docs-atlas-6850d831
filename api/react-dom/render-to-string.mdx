@@ -6,7 +6,7 @@ description: Legacy synchronous server rendering API for React components
 # renderToString
 
 <Warning>
-`renderToString` is a legacy API. For new projects, use [`renderToPipeableStream`](/api/react-dom/render-to-pipeable-stream) (Node.js) or [`renderToReadableStream`](/api/react-dom/render-to-readable-stream) (Web Streams) instead.
+`renderToString` is a legacy API. For new projects, use [`renderToPipeableStream`](/api/server/render-to-pipe) (Node.js) or [`renderToReadableStream`](/api/server/render-to-readable-stream) (Web Streams) instead.
 </Warning>
 
 Renders a React tree to an HTML string synchronously on the server.
@@ -506,6 +506,6 @@ function renderPage(userContent) {
 ## Related APIs
 
 - [renderToStaticMarkup](/api/react-dom/render-to-static-markup) - Render without React attributes
-- [renderToPipeableStream](/api/react-dom/render-to-pipeable-stream) - Modern streaming SSR (Node.js)
-- [renderToReadableStream](/api/react-dom/render-to-readable-stream) - Modern streaming SSR (Web Streams)
+- [renderToPipeableStream](/api/server/render-to-pipe) - Modern streaming SSR (Node.js)
+- [renderToReadableStream](/api/server/render-to-readable-stream) - Modern streaming SSR (Web Streams)
 - [hydrateRoot](/api/react-dom/hydrate-root) - Hydrate server-rendered HTML
