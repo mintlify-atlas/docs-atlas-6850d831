@@ -1,7 +1,7 @@
 {
   "$schema": "https://mintlify.com/docs.json",
   "name": "React",
-  "theme": "palm",
+  "theme": "aspen",
   "colors": {
     "primary": "#61DAFB",
     "light": "#149ECA",
@@ -171,5 +171,7 @@
         ]
       }
     ]
-  }
+  },
+  "favicon": "/images/favicon-32x32.png",
+  "logo": "/images/590-5903330_reactjs-logo-react-js-transparent-icon-hd-png.png"
 }
