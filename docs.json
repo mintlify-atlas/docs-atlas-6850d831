@@ -1,11 +1,11 @@
 {
   "$schema": "https://mintlify.com/docs.json",
   "name": "React",
-  "theme": "aspen",
+  "theme": "sequoia",
   "colors": {
-    "primary": "#61DAFB",
-    "light": "#149ECA",
-    "dark": "#087EA4"
+    "primary": "#357DA1",
+    "light": "#357DA1",
+    "dark": "#357DA1"
   },
   "navbar": {
     "primary": {
